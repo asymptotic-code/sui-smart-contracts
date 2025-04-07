@@ -488,9 +488,6 @@ module token_distribution::accumulation_distributor {
     /* ================= test only ================= */
 
     #[test_only]
-    use std::vector;
-
-    #[test_only]
     public fun assert_balances_length(self: &AccumulationDistributor, len: u64) {
         assert!(bag::length(&self.balances) == len, 0);
     }
