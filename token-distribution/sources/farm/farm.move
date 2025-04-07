@@ -1,18 +1,18 @@
 /// `Farm` is essentially a wrapper around `TimeDistributor` and implements permission functionality
 /// on top of it with composability and flexibility in mind.
-/// 
+///
 /// It's intended to be used with `Pool` (from the `token_distribution::pool` module) to enable yield farming
 /// functionality where an amount of coins is allocated to be distributed across multiple different
 /// pools in each of which any number of participants can deposit tokens to recieve a share of the
 /// rewards (similar to liquidity mining functionality pioneered by SushiSwap and then implemented by
 /// many other DeFi platforms also).
-/// 
+///
 /// Nonetheless, it is not required to use this module with `Pool`. In order to add a member to a `Farm`,
 /// one creates a `FarmMemberKey` (anyone is allowed to create it), and then an admin can add this key
 /// to a `Farm` and adjust its weight. The owner of `FarmMemberKey` has the authority to withdraw
 /// rewards distributed for that key. This setup allows for any custom implementation of `Pool` to
 /// transparently work with this module.
-/// 
+///
 /// A `FarmMemberKey` can be a member of multiple `Farms` at once and there is support for enforcing
 /// atomic withdrawals from all the farms the key is a member of (implemented via the
 /// `MemberWithdrawAllTicket` hot potato struct). This allows for `Pools` to distribute rewards
@@ -21,21 +21,17 @@
 /// Usage:
 /// ```
 /// let (farm, admin_cap) = farm::create(balance, 1670758154, ctx);
-/// 
+///
 /// let key = farm::create_member_key(ctx);
 /// farm::add_member(&admin_cap, &mut farm, &mut key, 100, clock);
 /// farm::change_unlock_per_second(&admin_cap, &mut farm, 50, clock);
-/// 
+///
 /// /// some time later...
 /// let balance = farm::mebmer_withdraw_all(&mut farm, &mut key, clock);
 /// ```
 
 module token_distribution::farm {
-    use std::vector;
-    use sui::object::{Self, UID, ID};
     use sui::balance::{Self, Balance};
-    use sui::tx_context::{Self, TxContext};
-    use sui::transfer;
     use sui::coin::{Self, Coin};
     use sui::vec_set::{Self, VecSet};
     use sui::clock::Clock;
@@ -61,7 +57,7 @@ module token_distribution::farm {
     /* ================= AdminCap ================= */
 
     /// Capability that is used to give admin permissions over a farm.
-    struct AdminCap has key, store {
+    public struct AdminCap has key, store {
         id: UID
     }
 
@@ -75,7 +71,7 @@ module token_distribution::farm {
 
     /// `FarmMemberKey` is used to join `Farms` and collect rewards they distribute.
     /// Any key can be a member of multiple different `Farms` simultaneously.
-    struct FarmMemberKey has key, store {
+    public struct FarmMemberKey has key, store {
         id: UID,
         unique_memberships: u16,
         locked: bool
@@ -87,6 +83,7 @@ module token_distribution::farm {
     }
 
     /// Create a new `FarmMemberKey` and transfer it to TX sender.
+    #[allow(lint(self_transfer))]
     public fun create_and_transfer_member_key(ctx: &mut TxContext) {
         transfer::transfer(create_member_key(ctx), tx_context::sender(ctx));
     }
@@ -108,7 +105,7 @@ module token_distribution::farm {
 
     /// `Farm` is essentially a wrapper around `TimeDistributor` that allows the admin to add
     /// members and change parameters and members (`FarmMemberKey` holders) to collect rewards.
-    struct Farm<phantom T> has key, store {
+    public struct Farm<phantom T> has key, store {
         id: UID,
         admin_id: ID,
         td: TimeDistributor<T, ID>,
@@ -137,7 +134,7 @@ module token_distribution::farm {
         ctx: &mut TxContext
     ): AdminCap {
         let balance = coin::into_balance(coin);
-        let (farm, admin_cap) = create(balance, unlock_start_ts_sec, ctx); 
+        let (farm, admin_cap) = create(balance, unlock_start_ts_sec, ctx);
         transfer::share_object(farm);
 
         admin_cap
@@ -197,8 +194,8 @@ module token_distribution::farm {
     ) {
         assert_admin_cap(farm, cap);
 
-        let ids = vector::empty();
-        let i = 0;
+        let mut ids = vector::empty();
+        let mut i = 0;
         let n = vector::length(keys);
         while (i < n) {
             let key = vector::borrow_mut(keys, i);
@@ -230,7 +227,7 @@ module token_distribution::farm {
 
     /* ================= ForcefulRemovalReceipt ================= */
 
-    struct ForcefulRemovalReceipt<phantom T> has key, store {
+    public struct ForcefulRemovalReceipt<phantom T> has key, store {
         id: UID,
         key_id: ID,
         balance: Balance<T>,
@@ -296,12 +293,12 @@ module token_distribution::farm {
     /// NOTE: It's also possible to withdraw rewards from the `Farm` by using the `member_withdraw_all
     /// function directly just with the `FarmMemberKey`, but then it's up to the `FarmMemberKey` holder
     /// to make sure that its rewards are being collected correctly.
-    struct MemberWithdrawAllTicket {
+    public struct MemberWithdrawAllTicket {
         key_id: ID,
         farm_ids: VecSet<ID>
     }
 
-    /// Create a new `MemberWithdrawAllTicket`. This ticket can be disposed only when withdrawals from 
+    /// Create a new `MemberWithdrawAllTicket`. This ticket can be disposed only when withdrawals from
     /// all `Farms` the key is a member of have been done. Once a ticket has been created for a specific
     /// key, this key becomes "locked" and cannot be added to or removed from any `Farms` to guarantee safety.
     /// **NOTE**: The `MemberWithdrawAllTicket` gives permission to the holder to withdraw from `Farms`

@@ -6,10 +6,9 @@
 /// This module doesn't implement any permission functionality and it is intended to be used
 /// as a basic building block and to provide safety guarantees for building more complex token
 /// emission modules (e.g. vesting).
-/// 
+///
 module token_distribution::time_locked_balance {
     use sui::balance::{Self, Balance};
-    use sui::math;
     use sui::clock::Clock;
     use token_distribution::primitives_util::timestamp_sec;
 
@@ -17,7 +16,7 @@ module token_distribution::time_locked_balance {
 
     /// Wraps a `Balance<T>` and allows only `unlock_per_second` of it to be withdrawn
     /// per second starting from `unlock_start_ts_sec`. All timestamp fields are unix timestamp.
-    struct TimeLockedBalance<phantom T> has store {
+    public struct TimeLockedBalance<phantom T> has store {
         locked_balance: Balance<T>,
         unlock_start_ts_sec: u64,
         unlock_per_second: u64,
@@ -89,7 +88,7 @@ module token_distribution::time_locked_balance {
 
     /// Returns the total amount of balance that is yet to be unlocked.
     public fun remaining_unlock<T>(self: &TimeLockedBalance<T>, clock: &Clock): u64 {
-        let start = math::max(self.unlock_start_ts_sec, timestamp_sec(clock));
+        let start = std::u64::max(self.unlock_start_ts_sec, timestamp_sec(clock));
         if (start >= self.final_unlock_ts_sec) {
             return 0
         };
@@ -117,7 +116,7 @@ module token_distribution::time_locked_balance {
 
         balance::join(&mut self.locked_balance, balance);
         self.final_unlock_ts_sec = calc_final_unlock_ts_sec(
-            math::max(self.unlock_start_ts_sec, timestamp_sec(clock)),
+            std::u64::max(self.unlock_start_ts_sec, timestamp_sec(clock)),
             balance::value(&self.locked_balance),
             self.unlock_per_second
         );
@@ -132,7 +131,7 @@ module token_distribution::time_locked_balance {
 
         self.unlock_per_second = new_unlock_per_second;
         self.final_unlock_ts_sec = calc_final_unlock_ts_sec(
-            math::max(self.unlock_start_ts_sec, timestamp_sec(clock)),
+            std::u64::max(self.unlock_start_ts_sec, timestamp_sec(clock)),
             balance::value(&self.locked_balance),
             new_unlock_per_second
         );
@@ -145,7 +144,7 @@ module token_distribution::time_locked_balance {
     ) {
         unlock(self, clock);
 
-        let new_unlock_start_ts_sec = math::max(new_unlock_start_ts_sec, timestamp_sec(clock));
+        let new_unlock_start_ts_sec = std::u64::max(new_unlock_start_ts_sec, timestamp_sec(clock));
         self.unlock_start_ts_sec = new_unlock_start_ts_sec;
         self.final_unlock_ts_sec = calc_final_unlock_ts_sec(
             new_unlock_start_ts_sec,
@@ -215,10 +214,10 @@ module token_distribution::time_locked_balance {
         };
 
         let to_remain_locked = (
-            self.final_unlock_ts_sec - math::min(self.final_unlock_ts_sec, now)
+            self.final_unlock_ts_sec - std::u64::min(self.final_unlock_ts_sec, now)
         ) * self.unlock_per_second;
 
-        let locked_amount_round = 
+        let locked_amount_round =
             balance::value(&self.locked_balance) / self.unlock_per_second * self.unlock_per_second;
 
         locked_amount_round - to_remain_locked

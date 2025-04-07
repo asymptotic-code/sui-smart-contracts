@@ -24,7 +24,7 @@ module token_distribution::primitives_util {
 
         clock::increment_for_testing(&mut clock, 500);
         assert!(timestamp_sec(&clock) == 1, 0);
-        
+
         clock::increment_for_testing(&mut clock, 700);
         assert!(timestamp_sec(&clock) == 2, 0);
 

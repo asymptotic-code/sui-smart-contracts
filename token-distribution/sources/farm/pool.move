@@ -1,29 +1,29 @@
 /// `Pool` is a wrapper around `AccumulationDistributor` intended to be used with `Farm` to enable
 /// any amount of participants to receive coin emissions proportional to their stake (shares in the pool).
-/// 
+///
 /// A `Pool` can be a member of multiple `Farms` simultaneously which means that stake holders
 /// can recieve rewards in multiple different currencies at once, but the currency used to provide
 /// stake is limited only to one type `S`. Anyone is allowed to deposit shares into the pool.
-/// 
+///
 /// Since a `Pool` can be a member of ultiple `Farms`, for correctness, a lot of operations require
 /// `TopUpTicket` to be used. `TupUpTicket` is a wrapper arround `token_distribution::farm::MemberWithdrawAllTicket` and
 /// guarantees that the pool is fully topped up with (potentially heterogeneous) balances from all the `Farms`
 /// the pool is a member of. This is needed to guarantee the correctness of the reward amounts distributed
 /// to each stake holder w.r.t. their share amount.
-/// 
+///
 /// Usage:
 /// ```
 /// // create pool
 /// let pool_cap = admin_cap::create(ctx);
 /// let pool = pool::create<FOO>(&pool_cap, ctx);
 /// pool::add_to_farm(&farm_cap, farm, &pool_cap, &mut pool, 100, clock);
-/// 
+///
 /// // deposit shares
 /// let ticket = pool::new_top_up_ticket ;
 /// pool::top_up(farm, &mut pool, &mut ticket, clock);
 /// let balance: Balance<FOO> = <...>;
 /// let stake = pool::deposit_shares_new(&mut pool, balance, ticket, ctx);
-/// 
+///
 /// // collect rewards (some time later)
 /// let ticket = pool::new_top_up_ticket ;
 /// pool::top_up(farm, &mut pool, &mut ticket, clock);
@@ -31,10 +31,7 @@
 /// ```
 
 module token_distribution::pool {
-    use sui::object::{Self, UID, ID};
     use sui::balance::{Self, Balance};
-    use sui::tx_context::{TxContext};
-    use sui::transfer;
     use sui::clock::Clock;
     use token_distribution::accumulation_distributor::{Self as acc, AccumulationDistributor, Position};
     use token_distribution::farm::{AdminCap as FarmAdminCap};
@@ -48,7 +45,7 @@ module token_distribution::pool {
     /* ================= AdminCap ================= */
 
     /// Capability that is used to give admin permissions over a farm.
-    struct AdminCap has key, store {
+    public struct AdminCap has key, store {
         id: UID
     }
 
@@ -63,7 +60,7 @@ module token_distribution::pool {
     /// `Pool` is essentially a wrapper around `AccumulationDistributor` that is able to join a `Farm`
     /// as a member, collect rewards from its distribution, and then distribute them to its depositors
     /// (stake holders).
-    struct Pool<phantom S> has key, store {
+    public struct Pool<phantom S> has key, store {
         id: UID,
         admin_id: ID,
         acc: AccumulationDistributor,
@@ -123,7 +120,7 @@ module token_distribution::pool {
         clock: &Clock,
         ctx: &mut TxContext
     ): AdminCap {
-        let (pool, pool_cap) = create<S>(ctx);
+        let (mut pool, pool_cap) = create<S>(ctx);
         add_to_farm(farm_cap, farm, &pool_cap, &mut pool, weight, clock);
         transfer::share_object(pool);
 
@@ -153,7 +150,7 @@ module token_distribution::pool {
 
     /// Represents a stake (deposited coins) in the `Pool`. Recieves rewards proportional to the
     /// total stake in the `Pool`.
-    struct Stake<phantom S> has key, store {
+    public struct Stake<phantom S> has key, store {
         id: UID,
         position: Position,
         balance: Balance<S>
@@ -181,10 +178,10 @@ module token_distribution::pool {
     // NOTE: in theory, it would be safe to use the `Pool` even when it hasn't been fully updated with rewards
     // from all the `Farms`, but then this would have to be implemented on the client-side for the `Stake`s to
     // receive their rightful rewards in time. So for correctness and safety, this is done on the contract side.
-    struct TopUpTicket {
+    public struct TopUpTicket {
         withdraw_all_ticket: MemberWithdrawAllTicket
     }
-    
+
     /// Create a new `TopUpTicket`. This ticket can only be disposed only when the pool has been topped up with
     /// rewards from all `Farms` it is a member of. This is done by calling `top_up` on the pool with each of the
     /// farms it's a member of.

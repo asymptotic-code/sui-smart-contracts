@@ -2,36 +2,33 @@
 /// proportionally based on the number number of "shares" they have staked in the distributor.
 /// Unlike the `TimeDistributor` the emissions are not based on the passage of time but rather
 /// on discrete (manual) deposits using the `top_up` function.
-/// 
+///
 /// For example, if there are two positions with 100 and 300 shares each, and if a balance
 /// of 100 of coin type `T` is then deposited (via the `top_up` function) into the distributor,
 /// the stake holders will recieve 25 and 75 of the deposited balance respectively.
-/// 
+///
 /// This distributor can handle distribution of multiple different coin types simultaniously
 /// (notice that the `AccumulationDistributor` struct has no type parameters). This works transparently
 /// by simply depositing any coin type at any time using the `top_up` function. The heterogeneous coin
 /// balances are stored internally using `sui::bag`.
 ///
 /// This module doesn't implement any permission functionality and it's intended to be used as a
-/// building block for other modules.  
-/// 
+/// building block for other modules.
+///
 /// Usage:
 /// ```
 /// let ad = ad::create(&mut ctx);
 /// let position = ad::deposit_shares_new(&mut ad, 100);
-/// 
+///
 /// let balance: Balance<FOO> = <...>;
 /// ad::top_up(&mut ad, balance);
-/// 
+///
 /// let balance = ad::withdraw_all_rewards<FOO>(&mut ad, &mut position);
 /// ```
 
 module token_distribution::accumulation_distributor {
     use std::type_name::{Self, TypeName};
-    use std::option;
     use sui::balance::{Self, Balance};
-    use sui::object::{Self, UID, ID};
-    use sui::tx_context::{TxContext};
     use sui::bag::{Self, Bag};
     use sui::vec_map::{Self, VecMap};
 
@@ -51,7 +48,7 @@ module token_distribution::accumulation_distributor {
 
     /* ================= AccumulationDistributor ================= */
 
-    struct AccumulationDistributor has store {
+    public struct AccumulationDistributor has store, key {
         id: UID,
         // `Bag` that holds balances to be claimed by stake holders.
         balances: Bag,
@@ -79,34 +76,34 @@ module token_distribution::accumulation_distributor {
 
     /// Check whether the distributor holds currency of type `T`.
     public fun has_balance_with_type<T>(self: &AccumulationDistributor): bool {
-        let type = type_name::get<T>();
-        has_balance(self, &type)
+        let currency_type = type_name::get<T>();
+        has_balance(self, &currency_type)
     }
 
-    /// Returns balance 
+    /// Returns balance
     public fun balance_value<T>(self: &AccumulationDistributor): u64 {
-        let type = type_name::get<T>();
-        let balance: &Balance<T> = bag::borrow(&self.balances, type);
+        let currency_type = type_name::get<T>();
+        let balance: &Balance<T> = bag::borrow(&self.balances, currency_type);
         balance::value(balance)
     }
 
     /// Withdraws extraneous balance of currency of type `T`.
     public fun remove_extraneous_balance<T>(self: &mut AccumulationDistributor): Balance<T> {
-        let type = type_name::get<T>();
-        bag::remove(&mut self.extraneous_balances, type)
+        let currency_type = type_name::get<T>();
+        bag::remove(&mut self.extraneous_balances, currency_type)
     }
 
     /* ================= Position ================= */
 
     /// Internal struct used for balance accounting of currencies handled by the distributor for a `Position`.
-    struct PositionBalance has store {
+    public struct PositionBalance has store {
         available_rewards: u64,
         last_acc_rewards_per_share_x64: u256
     }
 
     /// `Position` represents a stake in the distributor and its owner can collect any balances
     /// accumulated for the amount of shares that are held within it.
-    struct Position has store {
+    public struct Position has store {
         ad_id: ID,
         shares: u64,
         balances: VecMap<TypeName, PositionBalance>
@@ -121,9 +118,9 @@ module token_distribution::accumulation_distributor {
     /// without needing to update its state. It is the max amount that can be used in the `withdraw_rewards_direct`
     /// call for this `Position`.
     public fun position_reward_value_direct(
-        self: &AccumulationDistributor, position: &Position, type: TypeName
+        self: &AccumulationDistributor, position: &Position, currency_type: TypeName
     ): u64 {
-        let idx = vec_map::get_idx(&self.acc_rewards_per_share_x64, &type);
+        let idx = vec_map::get_idx(&self.acc_rewards_per_share_x64, &currency_type);
         let available_rewards = if (idx < vec_map::size(&position.balances)) {
             let (_, balance) = vec_map::get_entry_by_idx(&position.balances, idx);
             balance.available_rewards
@@ -140,22 +137,22 @@ module token_distribution::accumulation_distributor {
     public fun position_rewards_value_direct_with_type<T>(
         self: &AccumulationDistributor, position: &Position
     ): u64 {
-        let type = type_name::get<T>();
-        position_reward_value_direct(self, position, type)
+        let currency_type = type_name::get<T>();
+        position_reward_value_direct(self, position, currency_type)
     }
 
     /// Return the total rewards (of the specified currency) rewarded to the `Position`.
     public fun position_rewards_value(
-        self: &AccumulationDistributor, position: &Position, type: TypeName
+        self: &AccumulationDistributor, position: &Position, currency_type: TypeName
     ): u64 {
-        let idx = vec_map::get_idx(&self.acc_rewards_per_share_x64, &type);
+        let idx = vec_map::get_idx(&self.acc_rewards_per_share_x64, &currency_type);
         let available_rewards = if (idx < vec_map::size(&position.balances)) {
             let (_, balance) = vec_map::get_entry_by_idx(&position.balances, idx);
             balance.available_rewards
         } else {
             0
         };
-        
+
         available_rewards + calc_position_unlockable_rewards_idx(self, position, idx)
     }
 
@@ -163,8 +160,8 @@ module token_distribution::accumulation_distributor {
     public fun position_rewards_value_with_type<T>(
         self: &AccumulationDistributor, position: &Position
     ): u64 {
-        let type = type_name::get<T>();
-        position_rewards_value(self, position, type)
+        let currency_type = type_name::get<T>();
+        position_rewards_value(self, position, currency_type)
     }
 
     /* ================= main ================= */
@@ -186,41 +183,41 @@ module token_distribution::accumulation_distributor {
     public fun top_up<T>(self: &mut AccumulationDistributor, balance: Balance<T>) {
         // when there are no shares in the distributor the balance goes into the extraneous_balances bag.
         if (self.total_shares == 0) {
-            let type = type_name::get<T>();
+            let currency_type = type_name::get<T>();
 
-            if (bag::contains_with_type<TypeName, Balance<T>>(&self.extraneous_balances, type)) {
-                let extraneous_balance: &mut Balance<T> = bag::borrow_mut(&mut self.extraneous_balances, type);
+            if (bag::contains_with_type<TypeName, Balance<T>>(&self.extraneous_balances, currency_type)) {
+                let extraneous_balance: &mut Balance<T> = bag::borrow_mut(&mut self.extraneous_balances, currency_type);
                 balance::join(extraneous_balance, balance);
             } else {
-                bag::add(&mut self.extraneous_balances, type, balance);
+                bag::add(&mut self.extraneous_balances, currency_type, balance);
             };
 
             return
         };
 
         // add new balance if needed
-        let type = type_name::get<T>();
-        let idx_opt = vec_map::get_idx_opt(&self.acc_rewards_per_share_x64, &type);
+        let currency_type = type_name::get<T>();
+        let idx_opt = vec_map::get_idx_opt(&self.acc_rewards_per_share_x64, &currency_type);
         let idx = if (option::is_some(&idx_opt)) {
             option::destroy_some(idx_opt)
         } else {
             bag::add(
                 &mut self.balances,
-                type,
+                currency_type,
                 balance::zero<T>(),
             );
-            vec_map::insert(&mut self.acc_rewards_per_share_x64, type, 0);
+            vec_map::insert(&mut self.acc_rewards_per_share_x64, currency_type, 0);
 
             vec_map::size(&self.acc_rewards_per_share_x64) - 1
         };
 
-        let self_balance = bag::borrow_mut<TypeName, Balance<T>>(&mut self.balances, type);
+        let self_balance = bag::borrow_mut<TypeName, Balance<T>>(&mut self.balances, currency_type);
         let (_, acc_rewards_per_share_x64) = vec_map::get_entry_by_idx_mut(
             &mut self.acc_rewards_per_share_x64, idx
         );
 
         // Won't overflow because at most `2^64 - 1` of balance can be deposited at once and because of that
-        // (when total_shares is 1) `acc_rewards_per_share_x64` can at most increase by 2^(128 - 1) per 
+        // (when total_shares is 1) `acc_rewards_per_share_x64` can at most increase by 2^(128 - 1) per
         // each `top_up` call. Therefore, it would take more than 2^128 calls for this to overflow and
         // if you do one call of max balance per second, it would take roughly 10^31 years to max this out.
         *acc_rewards_per_share_x64 = *acc_rewards_per_share_x64 + (
@@ -233,16 +230,16 @@ module token_distribution::accumulation_distributor {
     public fun deposit_shares_new(
         self: &mut AccumulationDistributor, amount: u64
     ): Position {
-        let balances = vec_map::empty<TypeName, PositionBalance>();
+        let mut balances = vec_map::empty<TypeName, PositionBalance>();
 
-        let i = 0;
+        let mut i = 0;
         let n = vec_map::size(&self.acc_rewards_per_share_x64);
         while (i < n) {
-            let (type, acc_rewards_per_share_x64) = vec_map::get_entry_by_idx(
+            let (currency_type, acc_rewards_per_share_x64) = vec_map::get_entry_by_idx(
                 &self.acc_rewards_per_share_x64, i
             );
 
-            vec_map::insert(&mut balances, *type, PositionBalance {
+            vec_map::insert(&mut balances, *currency_type, PositionBalance {
                 available_rewards: 0,
                 last_acc_rewards_per_share_x64: *acc_rewards_per_share_x64
             });
@@ -265,12 +262,12 @@ module token_distribution::accumulation_distributor {
         let start = vec_map::size(&position.balances);
         let end = vec_map::size(&self.acc_rewards_per_share_x64);
 
-        let i = start;
+        let mut i = start;
         while (i < end) {
-            let (type, _) = vec_map::get_entry_by_idx(&self.acc_rewards_per_share_x64, i);
+            let (currency_type, _) = vec_map::get_entry_by_idx(&self.acc_rewards_per_share_x64, i);
             vec_map::insert(
                 &mut position.balances,
-                *type,
+                *currency_type,
                 PositionBalance {
                     available_rewards: 0,
                     last_acc_rewards_per_share_x64: 0
@@ -327,7 +324,7 @@ module token_distribution::accumulation_distributor {
     ) {
         position_add_missing_balances(self, position);
 
-        let i = 0;
+        let mut i = 0;
         let n = vec_map::size(&self.acc_rewards_per_share_x64);
         while (i < n) {
             update_position_single(self, position, i);
@@ -369,10 +366,11 @@ module token_distribution::accumulation_distributor {
         assert!(&from.ad_id == id, EInvalidPosition);
         assert!(&into.ad_id == id, EInvalidPosition);
 
+        let mut from: Position = from;
         update_position(self, &mut from);
         update_position(self, into);
 
-        let i = 0;
+        let mut i = 0;
         let n = vec_map::size(&into.balances);
         while (i < n) {
             let idx = n - 1 - i;
@@ -398,9 +396,9 @@ module token_distribution::accumulation_distributor {
     public fun position_destroy_empty(position: Position) {
         assert!(position.shares == 0, ENotEmpty);
 
-        let Position { ad_id: _, shares: _, balances} = position;
+        let Position { ad_id: _, shares: _, mut balances} = position;
 
-        let i = 0;
+        let mut i = 0;
         let n = vec_map::size(&balances);
         while (i < n) {
             let (_, balance) = vec_map::pop(&mut balances);
@@ -415,7 +413,7 @@ module token_distribution::accumulation_distributor {
         };
 
         vec_map::destroy_empty(balances);
-    } 
+    }
 
     /// Withdraw rewards without updating the position w.r.t. the current distributor state.
     /// This is possible since reward amounts unlocked at previous updates are internally cached.
@@ -428,11 +426,11 @@ module token_distribution::accumulation_distributor {
 
         position_add_missing_balances(self, position);
 
-        let type = type_name::get<T>();
-        let idx = vec_map::get_idx(&position.balances, &type);
+        let currency_type = type_name::get<T>();
+        let idx = vec_map::get_idx(&position.balances, &currency_type);
 
         let (_, position_bal) = vec_map::get_entry_by_idx_mut(&mut position.balances, idx);
-        let balance = bag::borrow_mut<TypeName, Balance<T>>(&mut self.balances, type);
+        let balance = bag::borrow_mut<TypeName, Balance<T>>(&mut self.balances, currency_type);
 
         assert!(position_bal.available_rewards >= amount, ENotEnough);
         position_bal.available_rewards = position_bal.available_rewards - amount;
@@ -448,8 +446,8 @@ module token_distribution::accumulation_distributor {
 
         position_add_missing_balances(self, position);
 
-        let type = type_name::get<T>();
-        let idx = vec_map::get_idx(&position.balances, &type);
+        let currency_type = type_name::get<T>();
+        let idx = vec_map::get_idx(&position.balances, &currency_type);
 
         // update if needed
         let (_, position_bal) = vec_map::get_entry_by_idx_mut(&mut position.balances, idx);
@@ -458,7 +456,7 @@ module token_distribution::accumulation_distributor {
         };
 
         let (_, position_bal) = vec_map::get_entry_by_idx_mut(&mut position.balances, idx);
-        let balance = bag::borrow_mut<TypeName, Balance<T>>(&mut self.balances, type);
+        let balance = bag::borrow_mut<TypeName, Balance<T>>(&mut self.balances, currency_type);
 
         assert!(position_bal.available_rewards >= amount, ENotEnough);
         position_bal.available_rewards = position_bal.available_rewards - amount;
@@ -474,12 +472,12 @@ module token_distribution::accumulation_distributor {
 
         position_add_missing_balances(self, position);
 
-        let type = type_name::get<T>();
-        let idx = vec_map::get_idx(&position.balances, &type);
+        let currency_type = type_name::get<T>();
+        let idx = vec_map::get_idx(&position.balances, &currency_type);
         update_position_single(self, position, idx);
 
         let (_, position_bal) = vec_map::get_entry_by_idx_mut(&mut position.balances, idx);
-        let balance = bag::borrow_mut<TypeName, Balance<T>>(&mut self.balances, type);
+        let balance = bag::borrow_mut<TypeName, Balance<T>>(&mut self.balances, currency_type);
 
         let amount = position_bal.available_rewards;
         position_bal.available_rewards = 0;
@@ -568,14 +566,14 @@ module token_distribution::accumulation_distributor {
     #[test_only]
     public fun assert_acc_rewards_per_share_x64(
         self: &AccumulationDistributor,
-        types: vector<TypeName>, 
+        types: vector<TypeName>,
         values: vector<u256>
     ) {
         let len = vec_map::size(&self.acc_rewards_per_share_x64);
         assert!(vector::length(&types) == len, 0);
         assert!(vector::length(&values) == len, 0);
 
-        let i = 0;
+        let mut i = 0;
         while (i < len) {
             let (act_k, act_v)  = vec_map::get_entry_by_idx(&self.acc_rewards_per_share_x64, i);
             assert!(vector::borrow(&types, i) == act_k, 0);
@@ -603,7 +601,7 @@ module token_distribution::accumulation_distributor {
     #[test_only]
     public fun assert_position_balances(
         position: &Position,
-        types: vector<TypeName>, 
+        types: vector<TypeName>,
         available_rewards: vector<u64>,
         last_acc_rewards_per_share_x64: vector<u256>
     ) {
@@ -612,7 +610,7 @@ module token_distribution::accumulation_distributor {
         assert!(vector::length(&available_rewards) == len, 0);
         assert!(vector::length(&last_acc_rewards_per_share_x64) == len, 0);
 
-        let i = 0;
+        let mut i = 0;
         while (i < len) {
             let (act_type, balance)  = vec_map::get_entry_by_idx(&position.balances, i);
             assert!(vector::borrow(&types, i) == act_type, 0);
