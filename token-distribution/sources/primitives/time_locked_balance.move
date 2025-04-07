@@ -263,4 +263,365 @@ module token_distribution::time_locked_balance {
             self.final_unlock_ts_sec
         )
     }
+
+    /* ================= specs ================= */
+
+    #[spec_only]
+    use prover::prover::{asserts, requires, ensures, old};
+    #[spec_only]
+    use std::integer::Integer;
+
+    #[spec_only]
+    macro fun start_timestamp_limit(): u64 {
+        // to require timestamp near current time to simplify checking
+        // this will help avoiding overflow while calculating final_unlock_ts_sec
+        4102320000  //January 1, 2200
+    }
+
+    #[spec_only]
+    macro fun require_start_timestamp_valid($unlock_start_ts_sec: u64) {
+        requires($unlock_start_ts_sec <= start_timestamp_limit!()); //January 1, 2200
+    }
+
+    #[spec_only]
+    macro fun unlockable_amount_expected<$T>($self: &TimeLockedBalance<$T>, $now: u64): Integer {
+        let self = $self;
+        if (self.unlock_per_second == 0
+            || $now <= self.unlock_start_ts_sec) {
+            return std::integer::zero!()
+        };
+
+        let to_remain_locked = std::integer::mul(
+            self.unlock_per_second.to_int(),
+            std::integer::sub(
+                self.final_unlock_ts_sec.to_int(),
+                (std::u64::min(self.final_unlock_ts_sec, $now)).to_int()
+            )
+        );
+
+        let locked_amount_round =
+            balance::value(&self.locked_balance) / self.unlock_per_second * self.unlock_per_second;
+
+        std::integer::sub(locked_amount_round.to_int(), to_remain_locked)
+    }
+
+    #[spec_only]
+    public use fun TimeLockedBalance_inv as TimeLockedBalance.inv;
+    #[spec_only]
+    fun TimeLockedBalance_inv<T>(self: &TimeLockedBalance<T>): bool {
+        let mut timestamp = std::u64::max(self.unlock_start_ts_sec, self.previous_unlock_at);
+        if (timestamp > self.final_unlock_ts_sec) {
+            timestamp = self.final_unlock_ts_sec;
+        };
+        let final_unlock_ts_expected = if (self.unlock_per_second > 0) {
+            std::integer::add(
+                timestamp.to_int(),
+                (balance::value(&self.locked_balance) / self.unlock_per_second).to_int()
+            )
+        } else {
+            std::integer::zero!()
+        };
+        let unlocked_balance_limit = std::integer::add(
+            std::integer::mul(
+                std::integer::sub(timestamp.to_int(), self.unlock_start_ts_sec.to_int()),
+                self.unlock_per_second.to_int()
+            ),
+            balance::value(&self.unlocked_balance).to_int()
+        );
+        let locked_balance_extraneous = if (self.unlock_per_second > 0) {
+            std::integer::mod(
+                (balance::value(&self.locked_balance)).to_int(),
+                self.unlock_per_second.to_int()
+            )
+        } else {
+            std::integer::zero!()
+        };
+        let locked_balance_expected = if (self.final_unlock_ts_sec > 0) {
+            std::integer::add(
+                locked_balance_extraneous,
+                std::integer::mul(
+                    self.unlock_per_second.to_int(),
+                    std::integer::sub(self.final_unlock_ts_sec.to_int(), timestamp.to_int())
+                )
+            )
+        } else {
+            std::integer::zero!()
+        };
+
+        // check timestamp in correct order
+        self.unlock_start_ts_sec <= start_timestamp_limit!()
+        && std::integer::lte(final_unlock_ts_expected, std::u64::max_value!().to_int())
+        && (self.final_unlock_ts_sec).to_int() == final_unlock_ts_expected
+        && (self.final_unlock_ts_sec == 0 || self.unlock_start_ts_sec <= self.final_unlock_ts_sec)
+        // && self.previous_unlock_at <= self.final_unlock_ts_sec
+        // && (self.previous_unlock_at == 0 || self.unlock_start_ts_sec <= self.previous_unlock_at)
+        // check balances
+        && (self.final_unlock_ts_sec == 0
+            || balance::value(&self.locked_balance).to_int() == locked_balance_expected)
+        && (self.final_unlock_ts_sec == 0
+            || self.final_unlock_ts_sec == self.previous_unlock_at
+            || std::integer::lte(
+                balance::value(&self.unlocked_balance).to_int(),
+                unlocked_balance_limit
+            ) //<= due to possible withdrawal
+        )
+        && std::integer::lte(
+            std::integer::add(
+                balance::value(&self.locked_balance).to_int(),
+                balance::value(&self.unlocked_balance).to_int()
+            ),
+            std::u64::max_value!().to_int()
+        )
+    }
+
+    #[spec]
+    public fun create_spec<T>(
+        locked_balance: Balance<T>,
+        unlock_start_ts_sec: u64,
+        unlock_per_second: u64
+    ): TimeLockedBalance<T> {
+        require_start_timestamp_valid!(unlock_start_ts_sec);
+        let locked_balance_value = balance::value(&locked_balance);
+
+        let m = std::u64::max(2000, 1000);  // to allow max usage inside invariant
+
+        // asserts calc_final_unlock_ts_sec won't overflow
+        //  =>  (start_ts + amount_to_issue / unlock_per_second) <= std::u64::max_value!()
+        //  =>  amount_to_issue <= (std::u64::max_value!() - start_ts) * unlock_per_second
+        let locked_balance_limit = std::integer::mul(
+            (std::u64::max_value!() - unlock_start_ts_sec).to_int(),
+            unlock_per_second.to_int()
+        );
+        asserts(unlock_per_second == 0 || std::integer::lte(locked_balance_value.to_int(), locked_balance_limit));
+
+        let result = create(locked_balance, unlock_start_ts_sec, unlock_per_second);
+
+        ensures(balance::value(&result.locked_balance) == locked_balance_value);
+        ensures(result.unlock_start_ts_sec == unlock_start_ts_sec);
+        ensures(result.unlock_per_second == unlock_per_second);
+        ensures(balance::value(&result.unlocked_balance) == 0);
+        ensures(result.previous_unlock_at == 0);
+
+        result
+    }
+
+    #[spec]
+    public fun extraneous_locked_amount_spec<T>(self: &TimeLockedBalance<T>): u64 {
+        let expected_result = if (self.unlock_per_second == 0) {
+            balance::value(&self.locked_balance)
+        } else {
+            balance::value(&self.locked_balance) % self.unlock_per_second
+        };
+
+        let result = extraneous_locked_amount(self);
+
+        ensures(result == expected_result);
+
+        result
+    }
+
+    #[spec]
+    public fun max_withdrawable_spec<T>(self: &TimeLockedBalance<T>, clock: &Clock): u64 {
+        requires(self.previous_unlock_at <= timestamp_sec(clock));
+
+        let expected_result = std::integer::add(
+            unlockable_amount_expected!(self, timestamp_sec(clock)),
+            balance::value(&self.unlocked_balance).to_int()
+        );
+
+        let result = max_withdrawable(self, clock);
+
+        ensures(result.to_int() == expected_result);
+
+        result
+    }
+
+    #[spec]
+    public fun remaining_unlock_spec<T>(self: &TimeLockedBalance<T>, clock: &Clock): u64 {
+        requires(self.previous_unlock_at <= timestamp_sec(clock));
+
+        let start = std::u64::max(self.unlock_start_ts_sec, timestamp_sec(clock));
+        let expected_result = if (start < self.final_unlock_ts_sec) {
+            (self.final_unlock_ts_sec - start) * self.unlock_per_second
+        } else {
+            0
+        };
+
+        let result = remaining_unlock(self, clock);
+
+        ensures(result == expected_result);
+
+        result
+    }
+
+    #[spec]
+    public fun withdraw_spec<T>(self: &mut TimeLockedBalance<T>, amount: u64, clock: &Clock): Balance<T> {
+        requires(self.previous_unlock_at <= timestamp_sec(clock));
+
+        let total_unlockable = std::integer::add(
+            unlockable_amount_expected!(self, timestamp_sec(clock)),
+            balance::value(&self.unlocked_balance).to_int()
+        );
+        asserts(std::integer::lte(amount.to_int(), total_unlockable));
+
+        let result = withdraw(self, amount, clock);
+
+        ensures(balance::value(&result) == amount);
+        ensures(total_unlockable == std::integer::add(
+            amount.to_int(),
+            balance::value(&self.unlocked_balance).to_int()
+        ));
+        ensures(self.previous_unlock_at == timestamp_sec(clock));
+
+        result
+    }
+
+    #[spec]
+    public fun withdraw_all_spec<T>(self: &mut TimeLockedBalance<T>, clock: &Clock): Balance<T> {
+        requires(self.previous_unlock_at <= timestamp_sec(clock));
+
+        let expected_result = std::integer::add(
+            unlockable_amount_expected!(self, timestamp_sec(clock)),
+            balance::value(&self.unlocked_balance).to_int()
+        );
+
+        let result = withdraw_all(self, clock);
+
+        ensures(balance::value(&result).to_int() == expected_result);
+        ensures(balance::value(&self.unlocked_balance) == 0);
+        ensures(self.previous_unlock_at == timestamp_sec(clock));
+
+        result
+    }
+
+    #[spec]
+    public fun top_up_spec<T>(self: &mut TimeLockedBalance<T>, balance: Balance<T>, clock: &Clock) {
+        requires(self.previous_unlock_at <= timestamp_sec(clock));
+
+        let total_coin_balance = std::integer::add(
+            balance::value(&balance).to_int(),
+            std::integer::add(
+                balance::value(&self.unlocked_balance).to_int(),
+                balance::value(&self.locked_balance).to_int()
+            )
+        );
+        requires(std::integer::lte(total_coin_balance, std::u64::max_value!().to_int()));
+
+        let unlocked_expected = unlockable_amount_expected!(self, timestamp_sec(clock));
+        let unlocked_balance_expected = std::integer::add(
+            balance::value(&self.unlocked_balance).to_int(),
+            unlocked_expected
+        );
+        let locked_balance_expected = std::integer::sub(
+            std::integer::add(
+                balance::value(&self.locked_balance).to_int(),
+                balance::value(&balance).to_int()
+            ),
+            unlocked_expected
+        );
+        let final_unlock_ts_sec_old = self.final_unlock_ts_sec;
+
+        // asserts calc_final_unlock_ts_sec won't overflow
+        let start_ts = std::u64::max(self.unlock_start_ts_sec, timestamp_sec(clock));
+        let locked_balance_limit = std::integer::mul(
+            (std::u64::max_value!() - start_ts).to_int(),
+            self.unlock_per_second.to_int()
+        );
+        asserts(self.unlock_per_second == 0 || std::integer::lte(locked_balance_expected, locked_balance_limit));
+
+        top_up(self, balance, clock);
+
+        ensures(balance::value(&self.unlocked_balance).to_int() == unlocked_balance_expected);
+        ensures(balance::value(&self.locked_balance).to_int() == locked_balance_expected);
+        ensures(self.previous_unlock_at == timestamp_sec(clock));
+        ensures(self.final_unlock_ts_sec >= final_unlock_ts_sec_old);
+    }
+
+    #[spec]
+    public fun change_unlock_per_second_spec<T>(
+        self: &mut TimeLockedBalance<T>, new_unlock_per_second: u64, clock: &Clock
+    ) {
+        requires(self.previous_unlock_at <= timestamp_sec(clock));
+
+        let unlocked_expected = unlockable_amount_expected!(self, timestamp_sec(clock));
+        let unlocked_balance_expected = std::integer::add(
+            balance::value(&self.unlocked_balance).to_int(),
+            unlocked_expected
+        );
+        let locked_balance_expected = std::integer::sub(
+            balance::value(&self.locked_balance).to_int(),
+            unlocked_expected
+        );
+        let final_unlock_ts_sec_old = self.final_unlock_ts_sec;
+        let unlock_per_second_old = self.unlock_per_second;
+
+        // asserts calc_final_unlock_ts_sec won't overflow
+        let start_ts = std::u64::max(self.unlock_start_ts_sec, timestamp_sec(clock));
+        let locked_balance_limit = std::integer::mul(
+            (std::u64::max_value!() - start_ts).to_int(),
+            new_unlock_per_second.to_int()
+        );
+        asserts(new_unlock_per_second == 0 || std::integer::lte(locked_balance_expected, locked_balance_limit));
+
+        change_unlock_per_second(self, new_unlock_per_second, clock);
+
+        ensures(self.unlock_per_second == new_unlock_per_second);
+        ensures(self.previous_unlock_at == timestamp_sec(clock));
+        if (new_unlock_per_second > 0) {
+            ensures(balance::value(&self.unlocked_balance).to_int() == unlocked_balance_expected);
+            ensures(balance::value(&self.locked_balance).to_int() == locked_balance_expected);
+        };
+        // *note*: next one is heavy for a prover, but still provable
+        if (new_unlock_per_second != 0
+            && unlock_per_second_old != 0
+            && self.previous_unlock_at != self.final_unlock_ts_sec
+            && self.unlock_start_ts_sec != self.final_unlock_ts_sec
+            && self.final_unlock_ts_sec != final_unlock_ts_sec_old
+        ) {
+            ensures((new_unlock_per_second > unlock_per_second_old)
+                    == (self.final_unlock_ts_sec < final_unlock_ts_sec_old));
+        };
+    }
+
+    #[spec]
+    public fun change_unlock_start_ts_sec_spec<T>(
+        self: &mut TimeLockedBalance<T>, new_unlock_start_ts_sec: u64, clock: &Clock
+    ) {
+        require_start_timestamp_valid!(new_unlock_start_ts_sec);
+        let timestamp = timestamp_sec(clock);
+        requires(self.previous_unlock_at <= timestamp);
+        require_start_timestamp_valid!(timestamp);
+
+        let unlocked_expected = unlockable_amount_expected!(self, timestamp_sec(clock));
+        let unlocked_balance_expected = std::integer::add(
+            balance::value(&self.unlocked_balance).to_int(),
+            unlocked_expected
+        );
+        let locked_balance_expected = std::integer::sub(
+            balance::value(&self.locked_balance).to_int(),
+            unlocked_expected
+        );
+
+        // asserts calc_final_unlock_ts_sec won't overflow
+        //  =>  (start_ts + amount_to_issue / unlock_per_second) <= std::u64::max_value!()
+        //  =>  amount_to_issue <= (std::u64::max_value!() - start_ts) * unlock_per_second
+        let unlock_start_ts_actual = std::u64::max(new_unlock_start_ts_sec, timestamp);
+        let locked_balance_limit = std::integer::mul(
+            (std::u64::max_value!() - unlock_start_ts_actual).to_int(),
+            self.unlock_per_second.to_int()
+        );
+        asserts(self.unlock_per_second == 0
+            || std::integer::lte(locked_balance_expected, locked_balance_limit)
+        );
+
+        let unlock_start_ts_sec_old = self.unlock_start_ts_sec;
+
+        change_unlock_start_ts_sec(self, new_unlock_start_ts_sec, clock);
+
+        ensures(self.unlock_start_ts_sec == unlock_start_ts_actual);
+        ensures(self.previous_unlock_at == timestamp);
+
+        ensures(balance::value(&self.unlocked_balance).to_int() == unlocked_balance_expected);
+        ensures(balance::value(&self.locked_balance).to_int() == locked_balance_expected);
+    }
 }
