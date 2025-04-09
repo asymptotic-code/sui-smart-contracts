@@ -308,7 +308,7 @@ module token_distribution::time_locked_balance {
     #[spec_only]
     public use fun TimeLockedBalance_inv as TimeLockedBalance.inv;
     #[spec_only]
-    fun TimeLockedBalance_inv<T>(self: &TimeLockedBalance<T>): bool {
+    public fun TimeLockedBalance_inv<T>(self: &TimeLockedBalance<T>): bool {
         let mut timestamp = std::u64::max(self.unlock_start_ts_sec, self.previous_unlock_at);
         if (timestamp > self.final_unlock_ts_sec) {
             timestamp = self.final_unlock_ts_sec;

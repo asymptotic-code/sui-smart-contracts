@@ -413,4 +413,52 @@ module token_distribution::time_distributor {
     ) {
         assert!(size(self) == size, 0);
     }
+
+    /* ================= specs ================= */
+
+    #[spec_only]
+    use prover::prover::{asserts, requires, ensures, old};
+    #[spec_only]
+    use std::integer::Integer;
+
+    #[spec_only]
+    macro fun start_timestamp_limit(): u64 {
+        // to require timestamp near current time to simplify checking
+        // this will help avoiding overflow while calculating final_unlock_ts_sec
+        4102320000  //January 1, 2200
+    }
+
+    #[spec_only]
+    macro fun require_start_timestamp_valid($unlock_start_ts_sec: u64) {
+        requires($unlock_start_ts_sec <= start_timestamp_limit!()); //January 1, 2200
+    }
+
+    #[spec_only]
+    public use fun TimeDistributor_inv as TimeDistributor.inv;
+    #[spec_only]
+    fun TimeDistributor_inv<T, K: copy>(self: &TimeDistributor<T, K>): bool {
+        self.tlb.inv()
+        && vec_map::size(&self.members) == 0
+            || tlb::unlock_per_second(&self.tlb) > 0
+                && self.total_weight > 0
+    }
+
+    #[spec(prove)]
+    public fun create_spec<T, K: copy>(
+        balance: Balance<T>, unlock_start_ts: u64,
+    ): TimeDistributor<T, K> {
+        require_start_timestamp_valid!(unlock_start_ts);
+
+        let result = create<T, K>(balance, unlock_start_ts);
+
+        ensures(vec_map::size(&result.members) == 0);
+        ensures(result.total_weight == 0);
+        ensures(balance::value(&result.unlocked_balance) == 0);
+        ensures(result.update_ts_sec == 0);
+        ensures(tlb::unlock_start_ts_sec(&result.tlb) == unlock_start_ts);
+        ensures(tlb::unlock_per_second(&result.tlb) == 0);
+        ensures(tlb::final_unlock_ts_sec(&result.tlb) == 0);
+
+        result
+    }
 }
