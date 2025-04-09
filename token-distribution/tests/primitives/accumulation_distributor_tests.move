@@ -3,15 +3,13 @@
 
 #[test_only]
 module token_distribution::accumulation_distributor_tests {
-    use std::vector;
     use std::type_name;
-    use sui::tx_context;
     use sui::balance::{Self, Balance};
     use sui::vec_map;
     use token_distribution::accumulation_distributor as ad;
 
-    struct FOO has drop {}
-    struct BAR has drop {}
+    public struct FOO has drop {}
+    public struct BAR has drop {}
 
     fun assert_and_destroy_balance<T>(balance: Balance<T>, value: u64) {
         assert!(balance::value(&balance) == value, 0);
@@ -19,7 +17,7 @@ module token_distribution::accumulation_distributor_tests {
     }
 
     fun vector_two<T>(first: T, second: T): vector<T> {
-        let ret = vector::empty();
+        let mut ret = vector::empty();
         vector::push_back(&mut ret, first);
         vector::push_back(&mut ret, second);
         ret
@@ -27,7 +25,7 @@ module token_distribution::accumulation_distributor_tests {
 
     #[test]
     public fun test_create() {
-        let ctx = tx_context::dummy();
+        let mut ctx = tx_context::dummy();
 
         let ad = ad::create(&mut ctx);
 
@@ -41,8 +39,8 @@ module token_distribution::accumulation_distributor_tests {
 
     #[test]
     public fun test_extraneous_balance() {
-        let ctx = tx_context::dummy();
-        let ad = ad::create(&mut ctx);
+        let mut ctx = tx_context::dummy();
+        let mut ad = ad::create(&mut ctx);
 
         // top up
         ad::top_up(&mut ad, balance::create_for_testing<FOO>(100));
@@ -87,7 +85,7 @@ module token_distribution::accumulation_distributor_tests {
     // inserted element will be at the last index. This is a sanity check that
     // this invariant holds.
     public fun test_vec_map_pushes_back() {
-        let map = vec_map::empty<u8, u64>();
+        let mut map = vec_map::empty<u8, u64>();
         vec_map::insert(&mut map, 11, 11111);
         vec_map::insert(&mut map, 22, 22222);
 
@@ -101,15 +99,15 @@ module token_distribution::accumulation_distributor_tests {
 
     #[test]
     public fun test_top_up() {
-        let ctx = tx_context::dummy();
-        let ad = ad::create(&mut ctx);
+        let mut ctx = tx_context::dummy();
+        let mut ad = ad::create(&mut ctx);
 
-        let position = ad::deposit_shares_new(&mut ad, 123);
+        let mut position = ad::deposit_shares_new(&mut ad, 123);
 
         // top up
         ad::top_up(&mut ad, balance::create_for_testing<FOO>(568));
 
-        ad::assert_balances_length(&ad, 1); 
+        ad::assert_balances_length(&ad, 1);
         ad::assert_balance_value<FOO>(&ad, 568);
         ad::assert_acc_rewards_per_share_x64(
             &ad,
@@ -123,14 +121,14 @@ module token_distribution::accumulation_distributor_tests {
         // top up new currency
         ad::top_up(&mut ad, balance::create_for_testing<BAR>(246));
 
-        ad::assert_balances_length(&ad, 2); 
+        ad::assert_balances_length(&ad, 2);
         ad::assert_balance_value<FOO>(&ad, 568);
         ad::assert_balance_value<BAR>(&ad, 246);
 
-        let types = vector::empty();
+        let mut types = vector::empty();
         vector::push_back(&mut types, type_name::get<FOO>());
         vector::push_back(&mut types, type_name::get<BAR>());
-        let acc = vector::empty();
+        let mut acc = vector::empty();
         vector::push_back(&mut acc, 85184964502983945673);
         vector::push_back(&mut acc, 36893488147419103232);
         ad::assert_acc_rewards_per_share_x64(
@@ -145,14 +143,14 @@ module token_distribution::accumulation_distributor_tests {
         // top up the first one again
         ad::top_up(&mut ad, balance::create_for_testing<FOO>(467));
 
-        ad::assert_balances_length(&ad, 2); 
+        ad::assert_balances_length(&ad, 2);
         ad::assert_balance_value<FOO>(&ad, 1035);
         ad::assert_balance_value<BAR>(&ad, 246);
 
-        let types = vector::empty();
+        let mut types = vector::empty();
         vector::push_back(&mut types, type_name::get<FOO>());
         vector::push_back(&mut types, type_name::get<BAR>());
-        let acc = vector::empty();
+        let mut acc = vector::empty();
         vector::push_back(&mut acc, 155222602571458422133);
         vector::push_back(&mut acc, 36893488147419103232);
         ad::assert_acc_rewards_per_share_x64(
@@ -182,11 +180,11 @@ module token_distribution::accumulation_distributor_tests {
 
     #[test]
     public fun test_deposit_and_withdraw_shares() {
-        let ctx = tx_context::dummy();
-        let ad = ad::create(&mut ctx);
+        let mut ctx = tx_context::dummy();
+        let mut ad = ad::create(&mut ctx);
 
         // deposit on empty
-        let position = ad::deposit_shares_new(&mut ad, 123);
+        let mut position = ad::deposit_shares_new(&mut ad, 123);
 
         ad::assert_position_shares(&position, 123);
         ad::assert_position_balances(
@@ -195,7 +193,7 @@ module token_distribution::accumulation_distributor_tests {
             vector::empty(),
             vector::empty()
         );
-        ad::assert_total_shares(&ad, 123); 
+        ad::assert_total_shares(&ad, 123);
 
         ad::assert_balances_length(&ad, 0);  // sanity
         ad::assert_acc_rewards_per_share_x64(
@@ -215,7 +213,7 @@ module token_distribution::accumulation_distributor_tests {
             vector::empty(),
             vector::empty()
         );
-        ad::assert_total_shares(&ad, 200); 
+        ad::assert_total_shares(&ad, 200);
 
         ad::assert_balances_length(&ad, 0);  // sanity
         ad::assert_acc_rewards_per_share_x64(
@@ -235,7 +233,7 @@ module token_distribution::accumulation_distributor_tests {
             vector::empty(),
             vector::empty()
         );
-        ad::assert_total_shares(&ad, 150); 
+        ad::assert_total_shares(&ad, 150);
 
         ad::assert_balances_length(&ad, 0);  // sanity
         ad::assert_acc_rewards_per_share_x64(
@@ -256,7 +254,7 @@ module token_distribution::accumulation_distributor_tests {
             vector::singleton(999),
             vector::singleton(122978293824730344106)
         );
-        ad::assert_total_shares(&ad, 210); 
+        ad::assert_total_shares(&ad, 210);
 
         ad::assert_balances_length(&ad, 1);  // sanity
         ad::assert_acc_rewards_per_share_x64(
@@ -277,7 +275,7 @@ module token_distribution::accumulation_distributor_tests {
             vector::singleton(1998),
             vector::singleton(210819932270966304182)
         );
-        ad::assert_total_shares(&ad, 160); 
+        ad::assert_total_shares(&ad, 160);
 
         ad::assert_balances_length(&ad, 1);  // sanity
         ad::assert_acc_rewards_per_share_x64(
@@ -298,7 +296,7 @@ module token_distribution::accumulation_distributor_tests {
             vector_two(1998, 1000),
             vector_two(210819932270966304182, 115292150460684697600)
         );
-        ad::assert_total_shares(&ad, 110); 
+        ad::assert_total_shares(&ad, 110);
 
         ad::assert_balances_length(&ad, 2);  // sanity
         ad::assert_acc_rewards_per_share_x64(
@@ -320,7 +318,7 @@ module token_distribution::accumulation_distributor_tests {
             vector_two(2997, 1999),
             vector_two(378517605668325864327, 282989823858044257745)
         );
-        ad::assert_total_shares(&ad, 210); 
+        ad::assert_total_shares(&ad, 210);
 
         ad::assert_balances_length(&ad, 2);  // sanity
         ad::assert_acc_rewards_per_share_x64(
@@ -340,7 +338,7 @@ module token_distribution::accumulation_distributor_tests {
             vector_two(2997, 1999),
             vector_two(378517605668325864327, 282989823858044257745)
         );
-        ad::assert_total_shares(&ad, 180); 
+        ad::assert_total_shares(&ad, 180);
 
         ad::assert_balances_length(&ad, 2);  // sanity
         ad::assert_acc_rewards_per_share_x64(
@@ -354,7 +352,7 @@ module token_distribution::accumulation_distributor_tests {
         ad::top_up(&mut ad, balance::create_for_testing<FOO>(1000));
         ad::top_up(&mut ad, balance::create_for_testing<BAR>(1000));
 
-        let position2 = ad::deposit_shares_new(&mut ad, 500);
+        let mut position2 = ad::deposit_shares_new(&mut ad, 500);
 
         ad::assert_position_shares(&position, 180); // position 1
         ad::assert_position_balances(
@@ -372,7 +370,7 @@ module token_distribution::accumulation_distributor_tests {
             vector_two(480999517188934484415, 385471735378652877833)
         );
 
-        ad::assert_total_shares(&ad, 680); 
+        ad::assert_total_shares(&ad, 680);
         ad::assert_balances_length(&ad, 2);  // sanity
         ad::assert_acc_rewards_per_share_x64(
             &ad,
@@ -404,7 +402,7 @@ module token_distribution::accumulation_distributor_tests {
             vector_two(508127082003213236791, 412599300192931630209)
         );
 
-        ad::assert_total_shares(&ad, 0); 
+        ad::assert_total_shares(&ad, 0);
         ad::assert_balances_length(&ad, 2);  // sanity
         ad::assert_acc_rewards_per_share_x64(
             &ad,
@@ -442,11 +440,11 @@ module token_distribution::accumulation_distributor_tests {
     #[test]
     #[expected_failure(abort_code = ad::EInvalidPosition)]
     public fun test_deposit_shares_aborts_on_invalid_id() {
-        let ctx = tx_context::dummy();
-        let ad1 = ad::create(&mut ctx);
-        let ad2 = ad::create(&mut ctx);
+        let mut ctx = tx_context::dummy();
+        let mut ad1 = ad::create(&mut ctx);
+        let mut ad2 = ad::create(&mut ctx);
 
-        let position = ad::deposit_shares_new(&mut ad1, 100);
+        let mut position = ad::deposit_shares_new(&mut ad1, 100);
         ad::deposit_shares(&mut ad2, &mut position, 100);
 
         ad::destroy_for_testing(ad1);
@@ -457,11 +455,11 @@ module token_distribution::accumulation_distributor_tests {
     #[test]
     #[expected_failure(abort_code = ad::EInvalidPosition)]
     public fun test_withdraw_shares_aborts_on_invalid_id() {
-        let ctx = tx_context::dummy();
-        let ad1 = ad::create(&mut ctx);
-        let ad2 = ad::create(&mut ctx);
+        let mut ctx = tx_context::dummy();
+        let mut ad1 = ad::create(&mut ctx);
+        let mut ad2 = ad::create(&mut ctx);
 
-        let position = ad::deposit_shares_new(&mut ad1, 100);
+        let mut position = ad::deposit_shares_new(&mut ad1, 100);
         ad::withdraw_shares(&mut ad2, &mut position, 100);
 
         ad::destroy_for_testing(ad1);
@@ -472,10 +470,10 @@ module token_distribution::accumulation_distributor_tests {
     #[test]
     #[expected_failure(abort_code = ad::ENotEnough)]
     public fun test_withdraw_shares_aborts_on_amount_too_large() {
-        let ctx = tx_context::dummy();
-        let ad = ad::create(&mut ctx);
+        let mut ctx = tx_context::dummy();
+        let mut ad = ad::create(&mut ctx);
 
-        let position = ad::deposit_shares_new(&mut ad, 100);
+        let mut position = ad::deposit_shares_new(&mut ad, 100);
         ad::withdraw_shares(&mut ad, &mut position, 101);
 
         ad::position_destroy_empty(position);
@@ -485,12 +483,12 @@ module token_distribution::accumulation_distributor_tests {
     #[test]
     #[expected_failure(abort_code = ad::EInvalidPosition)]
     public fun test_merge_positions_aborts_on_into_invalid_id() {
-        let ctx = tx_context::dummy();
-        let ad = ad::create(&mut ctx);
-        let ad_other = ad::create(&mut ctx);
+        let mut ctx = tx_context::dummy();
+        let mut ad = ad::create(&mut ctx);
+        let mut ad_other = ad::create(&mut ctx);
 
         let from = ad::deposit_shares_new(&mut ad, 100);
-        let into = ad::deposit_shares_new(&mut ad_other, 100);
+        let mut into = ad::deposit_shares_new(&mut ad_other, 100);
 
         ad::merge_positions(&mut ad, &mut into, from);
 
@@ -502,12 +500,12 @@ module token_distribution::accumulation_distributor_tests {
     #[test]
     #[expected_failure(abort_code = ad::EInvalidPosition)]
     public fun test_merge_positions_aborts_on_from_invalid_id() {
-        let ctx = tx_context::dummy();
-        let ad = ad::create(&mut ctx);
-        let ad_other = ad::create(&mut ctx);
+        let mut ctx = tx_context::dummy();
+        let mut ad = ad::create(&mut ctx);
+        let mut ad_other = ad::create(&mut ctx);
 
         let from = ad::deposit_shares_new(&mut ad_other, 100);
-        let into = ad::deposit_shares_new(&mut ad, 100);
+        let mut into = ad::deposit_shares_new(&mut ad, 100);
 
         ad::merge_positions(&mut ad, &mut into, from);
 
@@ -518,11 +516,11 @@ module token_distribution::accumulation_distributor_tests {
 
     #[test]
     public fun test_merge_positions() {
-        let ctx = tx_context::dummy();
-        let ad = ad::create(&mut ctx); 
+        let mut ctx = tx_context::dummy();
+        let mut ad = ad::create(&mut ctx);
 
-        let position1 = ad::deposit_shares_new(&mut ad, 100);
-        let position2 = ad::deposit_shares_new(&mut ad, 100);
+        let mut position1 = ad::deposit_shares_new(&mut ad, 100);
+        let mut position2 = ad::deposit_shares_new(&mut ad, 100);
 
         ad::top_up(&mut ad, balance::create_for_testing<FOO>(1111));
         ad::top_up(&mut ad, balance::create_for_testing<BAR>(2222));
@@ -549,7 +547,7 @@ module token_distribution::accumulation_distributor_tests {
             vector::empty()
         );
 
-        ad::assert_total_shares(&ad, 199); 
+        ad::assert_total_shares(&ad, 199);
         ad::assert_balances_length(&ad, 2);
         ad::assert_acc_rewards_per_share_x64(
             &ad,
@@ -598,8 +596,8 @@ module token_distribution::accumulation_distributor_tests {
     #[test]
     #[expected_failure(abort_code = ad::ENotEmpty)]
     public fun test_position_destroy_empty_aborts_when_shares_non_zero() {
-        let ctx = tx_context::dummy();
-        let ad = ad::create(&mut ctx); 
+        let mut ctx = tx_context::dummy();
+        let mut ad = ad::create(&mut ctx);
 
         let position = ad::deposit_shares_new(&mut ad, 100);
 
@@ -611,10 +609,10 @@ module token_distribution::accumulation_distributor_tests {
     #[test]
     #[expected_failure(abort_code = ad::ENotEmpty)]
     public fun test_position_destroy_empty_aborts_when_unlocked_non_zero() {
-        let ctx = tx_context::dummy();
-        let ad = ad::create(&mut ctx); 
+        let mut ctx = tx_context::dummy();
+        let mut ad = ad::create(&mut ctx);
 
-        let position = ad::deposit_shares_new(&mut ad, 100);
+        let mut position = ad::deposit_shares_new(&mut ad, 100);
 
         ad::top_up(&mut ad, balance::create_for_testing<FOO>(1000));
         ad::top_up(&mut ad, balance::create_for_testing<BAR>(1000));
@@ -632,10 +630,10 @@ module token_distribution::accumulation_distributor_tests {
 
     #[test]
     public fun test_position_destroy_empty() {
-        let ctx = tx_context::dummy();
-        let ad = ad::create(&mut ctx); 
+        let mut ctx = tx_context::dummy();
+        let mut ad = ad::create(&mut ctx);
 
-        let position = ad::deposit_shares_new(&mut ad, 100);
+        let mut position = ad::deposit_shares_new(&mut ad, 100);
 
         ad::top_up(&mut ad, balance::create_for_testing<FOO>(1000));
         ad::top_up(&mut ad, balance::create_for_testing<BAR>(1000));
@@ -654,21 +652,21 @@ module token_distribution::accumulation_distributor_tests {
         // clean up
         ad::assert_and_destroy_balance<FOO>(&mut ad, 0);
         ad::assert_and_destroy_balance<BAR>(&mut ad, 0);
-        ad::destroy_for_testing(ad);    
+        ad::destroy_for_testing(ad);
     }
 
     #[test]
     #[expected_failure(abort_code = ad::EInvalidPosition)]
     public fun test_withdraw_unlocked_aborts_when_id_doesnt_match() {
-        let ctx = tx_context::dummy();
-        let ad = ad::create(&mut ctx); 
-        let ad_other = ad::create(&mut ctx);
+        let mut ctx = tx_context::dummy();
+        let mut ad = ad::create(&mut ctx);
+        let mut ad_other = ad::create(&mut ctx);
 
-        let position_other = ad::deposit_shares_new(&mut ad_other, 100);
+        let mut position_other = ad::deposit_shares_new(&mut ad_other, 100);
 
         let bal = ad::withdraw_rewards<FOO>(&mut ad, &mut position_other, 0);
         balance::destroy_for_testing(bal);
-        
+
         // clean up
         ad::position_destroy_empty(position_other);
         ad::destroy_for_testing(ad);
@@ -678,15 +676,15 @@ module token_distribution::accumulation_distributor_tests {
     #[test]
     #[expected_failure(abort_code = ad::EInvalidPosition)]
     public fun test_withdraw_all_unlocked_aborts_when_id_doesnt_match() {
-        let ctx = tx_context::dummy();
-        let ad = ad::create(&mut ctx); 
-        let ad_other = ad::create(&mut ctx);
+        let mut ctx = tx_context::dummy();
+        let mut ad = ad::create(&mut ctx);
+        let mut ad_other = ad::create(&mut ctx);
 
-        let position_other = ad::deposit_shares_new(&mut ad_other, 100);
+        let mut position_other = ad::deposit_shares_new(&mut ad_other, 100);
 
         let bal = ad::withdraw_all_rewards<FOO>(&mut ad, &mut position_other);
         balance::destroy_for_testing(bal);
-        
+
         // clean up
         ad::position_destroy_empty(position_other);
         ad::destroy_for_testing(ad);
@@ -696,10 +694,10 @@ module token_distribution::accumulation_distributor_tests {
     #[test]
     #[expected_failure(abort_code = ad::ENotEnough)]
     public fun test_withdraw_unlocked_aborts_when_not_enough() {
-        let ctx = tx_context::dummy();
-        let ad = ad::create(&mut ctx); 
+        let mut ctx = tx_context::dummy();
+        let mut ad = ad::create(&mut ctx);
 
-        let position = ad::deposit_shares_new(&mut ad, 100);
+        let mut position = ad::deposit_shares_new(&mut ad, 100);
         ad::top_up(&mut ad, balance::create_for_testing<FOO>(1000));
 
         let b = ad::withdraw_rewards<FOO>(&mut ad, &mut position, 1001);
@@ -712,10 +710,10 @@ module token_distribution::accumulation_distributor_tests {
 
     #[test]
     public fun test_withdraw_unlocked() {
-        let ctx = tx_context::dummy();
-        let ad = ad::create(&mut ctx);
+        let mut ctx = tx_context::dummy();
+        let mut ad = ad::create(&mut ctx);
 
-        let position = ad::deposit_shares_new(&mut ad, 200); // deposit shares
+        let mut position = ad::deposit_shares_new(&mut ad, 200); // deposit shares
         ad::top_up(&mut ad, balance::create_for_testing<FOO>(0)); // top up 0
 
         ad::assert_position_shares(&position, 200); // sanity checks
@@ -725,7 +723,7 @@ module token_distribution::accumulation_distributor_tests {
             vector::empty(),
             vector::empty()
         );
-        ad::assert_total_shares(&ad, 200); 
+        ad::assert_total_shares(&ad, 200);
 
         ad::assert_balances_length(&ad, 1);
         ad::assert_acc_rewards_per_share_x64(
@@ -748,7 +746,7 @@ module token_distribution::accumulation_distributor_tests {
             vector::singleton(0),
             vector::singleton(0)
         );
-        ad::assert_total_shares(&ad, 200); 
+        ad::assert_total_shares(&ad, 200);
 
         ad::assert_balances_length(&ad, 1);  // sanity
         ad::assert_acc_rewards_per_share_x64(
@@ -773,7 +771,7 @@ module token_distribution::accumulation_distributor_tests {
             vector::singleton(1010),
             vector::singleton(102471663329456559226)
         );
-        ad::assert_total_shares(&ad, 200); 
+        ad::assert_total_shares(&ad, 200);
 
         ad::assert_balances_length(&ad, 1);  // sanity
         ad::assert_acc_rewards_per_share_x64(
@@ -798,7 +796,7 @@ module token_distribution::accumulation_distributor_tests {
             vector::singleton(910),
             vector::singleton(102471663329456559226)
         );
-        ad::assert_total_shares(&ad, 200); 
+        ad::assert_total_shares(&ad, 200);
 
         ad::assert_balances_length(&ad, 1);  // sanity
         ad::assert_acc_rewards_per_share_x64(
@@ -821,7 +819,7 @@ module token_distribution::accumulation_distributor_tests {
             vector::singleton(1010),
             vector::singleton(204943326658913118452)
         );
-        ad::assert_total_shares(&ad, 200); 
+        ad::assert_total_shares(&ad, 200);
 
         ad::assert_balances_length(&ad, 1);  // sanity
         ad::assert_acc_rewards_per_share_x64(
@@ -846,7 +844,7 @@ module token_distribution::accumulation_distributor_tests {
             vector::singleton(0),
             vector::singleton(307414989988369677678)
         );
-        ad::assert_total_shares(&ad, 200); 
+        ad::assert_total_shares(&ad, 200);
 
         ad::assert_balances_length(&ad, 1);  // sanity
         ad::assert_acc_rewards_per_share_x64(
@@ -869,7 +867,7 @@ module token_distribution::accumulation_distributor_tests {
             vector::singleton(0),
             vector::singleton(307414989988369677678)
         );
-        ad::assert_total_shares(&ad, 200); 
+        ad::assert_total_shares(&ad, 200);
 
         ad::assert_balances_length(&ad, 1);  // sanity
         ad::assert_acc_rewards_per_share_x64(
@@ -898,7 +896,7 @@ module token_distribution::accumulation_distributor_tests {
             vector_two(0, 610),
             vector_two(307414989988369677678, 102471663329456559226)
         );
-        ad::assert_total_shares(&ad, 200); 
+        ad::assert_total_shares(&ad, 200);
 
         ad::assert_balances_length(&ad, 2);  // sanity
         ad::assert_acc_rewards_per_share_x64(
@@ -912,8 +910,8 @@ module token_distribution::accumulation_distributor_tests {
         ad::top_up(&mut ad, balance::create_for_testing<FOO>(1111));
         ad::top_up(&mut ad, balance::create_for_testing<BAR>(1111));
 
-        let position1 = position;
-        let position2 = ad::deposit_shares_new(&mut ad, 500);
+        let mut position1 = position;
+        let mut position2 = ad::deposit_shares_new(&mut ad, 500);
 
         assert_and_destroy_balance(
             ad::withdraw_rewards<FOO>(&mut ad, &mut position1, 500),
@@ -949,7 +947,7 @@ module token_distribution::accumulation_distributor_tests {
             vector_two(409886653317826236904, 204943326658913118452)
         );
 
-        ad::assert_total_shares(&ad, 700); 
+        ad::assert_total_shares(&ad, 700);
         ad::assert_balances_length(&ad, 2);  // sanity
         ad::assert_acc_rewards_per_share_x64(
             &ad,
@@ -1019,13 +1017,13 @@ module token_distribution::accumulation_distributor_tests {
 
     #[test]
     public fun test_has_balance() {
-        let ctx = tx_context::dummy();
-        let ad = ad::create(&mut ctx);
+        let mut ctx = tx_context::dummy();
+        let mut ad = ad::create(&mut ctx);
 
         assert!(ad::has_balance(&ad, &type_name::get<FOO>()) == false, 0);
         assert!(ad::has_balance_with_type<FOO>(&ad) == false, 0);
 
-        let position = ad::deposit_shares_new(&mut ad, 100);
+        let mut position = ad::deposit_shares_new(&mut ad, 100);
         ad::top_up(&mut ad, balance::create_for_testing<FOO>(0));
 
         assert!(ad::has_balance(&ad, &type_name::get<FOO>()) == true, 0);
@@ -1044,15 +1042,15 @@ module token_distribution::accumulation_distributor_tests {
 
         ad::assert_and_destroy_balance<FOO>(&mut ad, 0);
         ad::assert_and_destroy_balance<BAR>(&mut ad, 0);
-        ad::destroy_for_testing(ad); 
+        ad::destroy_for_testing(ad);
     }
 
     #[test]
     public fun test_position_unlocked_balance_value() {
-        let ctx = tx_context::dummy();
-        let ad = ad::create(&mut ctx); 
+        let mut ctx = tx_context::dummy();
+        let mut ad = ad::create(&mut ctx);
 
-        let position = ad::deposit_shares_new(&mut ad, 100);
+        let mut position = ad::deposit_shares_new(&mut ad, 100);
         ad::top_up(&mut ad, balance::create_for_testing<FOO>(0));
 
         // check empty
@@ -1093,6 +1091,6 @@ module token_distribution::accumulation_distributor_tests {
 
         ad::assert_and_destroy_balance<FOO>(&mut ad, 0);
         ad::assert_and_destroy_balance<BAR>(&mut ad, 1);
-        ad::destroy_for_testing(ad); 
+        ad::destroy_for_testing(ad);
     }
 }
