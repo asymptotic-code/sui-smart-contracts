@@ -360,13 +360,12 @@ module token_distribution::accumulation_distributor {
 
     /// Merge two positions into a single.
     public fun merge_positions(
-        self: &mut AccumulationDistributor, into: &mut Position, from: Position
+        self: &mut AccumulationDistributor, into: &mut Position, mut from: Position
     ) {
         let id = object::uid_as_inner(&self.id);
         assert!(&from.ad_id == id, EInvalidPosition);
         assert!(&into.ad_id == id, EInvalidPosition);
 
-        let mut from: Position = from;
         update_position(self, &mut from);
         update_position(self, into);
 
