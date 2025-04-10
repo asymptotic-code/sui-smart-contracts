@@ -190,8 +190,8 @@ module token_distribution::time_distributor {
     /// Aborts if any of the provided member keys is already in the distributor.
     public fun add_members<T, K: copy>(
         self: &mut TimeDistributor<T, K>,
-        member_keys: vector<K>,
-        member_weights: vector<u32>,
+        mut member_keys: vector<K>,
+        mut member_weights: vector<u32>,
         clock: &Clock
     ) {
         let len = vector::length(&member_keys);
@@ -200,8 +200,6 @@ module token_distribution::time_distributor {
 
         update(self, clock);
 
-        let mut member_keys: vector<K> = member_keys;
-        let mut member_weights: vector<u32> = member_weights;
         // reverse so that when `pop_back` is used in the loop, the members
         // are added in the correct order
         vector::reverse(&mut member_keys);
