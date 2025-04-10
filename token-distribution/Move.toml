@@ -1,10 +1,18 @@
 [package]
 name = "TokenDistribution"
-version = "0.1.0"
 edition = "2024.beta"
 
-[dependencies]
-Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "mainnet-v1.61.3" }
+[dependencies.Sui]
+git = "https://github.com/asymptotic-code/sui.git"
+subdir = "crates/sui-framework/packages/sui-framework"
+rev = "next"
+override = true
+
+[dependencies.Prover]
+git = "https://github.com/asymptotic-code/sui.git"
+subdir = "crates/sui-framework/packages/prover"
+rev = "next"
+override = true
 
 [addresses]
 token_distribution = "0x0"
