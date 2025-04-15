@@ -427,3 +427,20 @@ public fun assert_member_values<T, K: copy>(
 public fun assert_members_size<T, K: copy>(self: &TimeDistributor<T, K>, size: u64) {
     assert!(size(self) == size);
 }
+
+#[spec_only]
+public fun total_weight<T, K: copy>(self: &TimeDistributor<T, K>): u64 {
+    self.total_weight
+}
+#[spec_only]
+public fun unlocked_balance<T, K: copy>(self: &TimeDistributor<T, K>): u64 {
+    self.unlocked_balance.value()
+}
+#[spec_only]
+public fun update_ts_sec<T, K: copy>(self: &TimeDistributor<T, K>): u64 {
+    self.update_ts_sec
+}
+#[spec_only]
+public fun tlb<T, K: copy>(self: &TimeDistributor<T, K>): &TimeLockedBalance<T> {
+    &self.tlb
+}

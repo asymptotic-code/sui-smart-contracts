@@ -1,7 +1,9 @@
 [package]
-name = "TokenDistribution"
-version = "0.1.0"
+name = "ProverSpecs"
 edition = "2024"
+
+[dependencies.TokenDistribution]
+local = "../token-distribution"
 
 [dependencies.Sui]
 git = "https://github.com/asymptotic-code/sui.git"
@@ -16,4 +18,4 @@ rev = "next"
 override = true
 
 [addresses]
-token_distribution = "0x0"
+prover_specs = "0x0"
