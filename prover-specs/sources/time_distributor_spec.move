@@ -2,16 +2,13 @@ module prover_specs::time_distributor_spec;
 
 use sui::balance::{Balance};
 use token_distribution::time_distributor::{Self, TimeDistributor};
-use token_distribution::time_locked_balance::{Self, TimeLockedBalance};
 use prover_specs::time_locked_balance_spec::TimeLockedBalance_inv;
 
 #[spec_only]
-use prover::prover::{asserts, requires, ensures, old};
-#[spec_only]
-use std::integer::Integer;
+use prover::prover::{asserts, requires, ensures};
 
 #[spec_only]
-use prover_specs::utils::{start_timestamp_limit, require_start_timestamp_valid};
+use prover_specs::utils::{require_start_timestamp_valid};
 
 #[spec_only]
 use fun TimeDistributor_inv as TimeDistributor.inv;

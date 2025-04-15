@@ -1,8 +1,8 @@
 module prover_specs::time_locked_balance_spec;
 
 use std::u64;
-use sui::clock::{Self, Clock};
-use sui::balance::{Self, Balance};
+use sui::clock::{Clock};
+use sui::balance::{Balance};
 use token_distribution::time_locked_balance::{Self, TimeLockedBalance};
 use token_distribution::primitives_util::timestamp_sec;
 
@@ -362,8 +362,6 @@ public fun change_unlock_start_ts_sec_spec<T>(
         self.unlock_per_second() == 0
             || std::integer::lte(locked_balance_expected, locked_balance_limit),
     );
-
-    let unlock_start_ts_sec_old = self.unlock_start_ts_sec();
 
     time_locked_balance::change_unlock_start_ts_sec(self, new_unlock_start_ts_sec, clock);
 

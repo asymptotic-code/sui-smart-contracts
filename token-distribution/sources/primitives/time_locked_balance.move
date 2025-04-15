@@ -269,15 +269,15 @@ public fun get_all_values<T>(self: &TimeLockedBalance<T>): (u64, u64, u64, u64, 
     )
 }
 
-#[spec_only]
+#[test_only]
 public fun unlocked_balance<T>(self: &TimeLockedBalance<T>): u64 {
     self.unlocked_balance.value()
 }
-#[spec_only]
+#[test_only]
 public fun locked_balance<T>(self: &TimeLockedBalance<T>): u64 {
     self.locked_balance.value()
 }
-#[spec_only]
+#[test_only]
 public fun previous_unlock_at<T>(self: &TimeLockedBalance<T>): u64 {
     self.previous_unlock_at
 }
