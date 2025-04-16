@@ -1,4 +1,4 @@
-module prover_specs::time_locked_balance_spec;
+module token_distribution_specs::time_locked_balance_spec;
 
 use std::u64;
 use sui::clock::{Clock};
@@ -12,7 +12,7 @@ use prover::prover::{asserts, requires, ensures, old};
 use std::integer::Integer;
 
 #[spec_only]
-use prover_specs::utils::{start_timestamp_limit, require_start_timestamp_valid};
+use token_distribution_specs::utils::{start_timestamp_limit, require_start_timestamp_valid};
 
 #[spec_only]
 macro fun unlockable_amount_expected<$T>($self: &TimeLockedBalance<$T>, $now: u64): Integer {

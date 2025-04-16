@@ -1,4 +1,4 @@
-module prover_specs::utils;
+module token_distribution_specs::utils;
 
 #[spec_only]
 use prover::prover::{requires};
