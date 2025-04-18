@@ -519,6 +519,41 @@ public fun init_for_testing(ctx: &mut TxContext) {
     init(ctx)
 }
 
+#[test_only]
+public fun GET_BPS_IN_100_PCT(): u64 {
+    BPS_IN_100_PCT
+}
+
+#[test_only]
+public fun balance_a<A, B>(pool: &Pool<A, B>): u64 {
+    pool.balance_a.value()
+}
+
+#[test_only]
+public fun balance_b<A, B>(pool: &Pool<A, B>): u64 {
+    pool.balance_b.value()
+}
+
+#[test_only]
+public fun lp_supply<A, B>(pool: &Pool<A, B>): u64 {
+    pool.lp_supply.supply_value()
+}
+
+#[test_only]
+public fun lp_fee_bps<A, B>(pool: &Pool<A, B>): u64 {
+    pool.lp_fee_bps
+}
+
+#[test_only]
+public fun admin_fee_pct<A, B>(pool: &Pool<A, B>): u64 {
+    pool.admin_fee_pct
+}
+
+#[test_only]
+public fun admin_fee_balance<A, B>(pool: &Pool<A, B>): u64 {
+    pool.admin_fee_balance.value()
+}
+
 /* ================= tests ================= */
 
 #[test_only]
