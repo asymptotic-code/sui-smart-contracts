@@ -5,7 +5,8 @@ module amm_specs::pool_specs;
 // specs needed to be updated
 
 use amm::pool;
-use amm::pool::{Pool, LP};
+
+use amm::pool::{Pool, LP, PoolRegistry};
 
 // use std::type_name::{Self, TypeName};
 use std::u128;
@@ -25,17 +26,17 @@ fun sqrt(x: u128): u64 {
 /// Invariant for the pool state.
 #[spec_only]
 use fun Pool_inv as Pool.inv;
-#[spec_only]
-fun Pool_inv<A, B>(self: &Pool<A, B>): bool {
-    let l = self.lp_supply();
-    let a = self.balance_a();
-    let b = self.balance_b();
+#[spec_only(inv_target = amm_specs::pool_specs::Pool)]
+fun Pool_inv<A, B>(pool: &Pool<A, B>): bool {
+    let l = pool::lp_supply(pool);
+    let a = pool::balance_a(pool);
+    let b = pool::balance_b(pool);
 
     // balances are 0 when LP supply is 0 or when LP supply > 0, both balances A and B are > 0
     ((l == 0 && a == 0 && b == 0) || (l > 0 && a > 0 && b > 0)) &&
     // the LP supply is always <= the geometric mean of the pool balances (this will make sure there is no overflow)
     l.to_int().mul(l.to_int()).lte(a.to_int().mul(b.to_int())) &&
-    self.lp_fee_bps() <= pool::GET_BPS_IN_100_PCT() && self.admin_fee_pct() <= 100
+    pool::lp_fee_bps(pool) <= pool::GET_BPS_IN_100_PCT() && pool::admin_fee_pct(pool) <= 100
 }
 
 #[spec_only]
@@ -89,258 +90,210 @@ macro fun requires_balance_sum_no_overflow<$T>($balance0: &Balance<$T>, $balance
 
 /* ================= specs ================= */
 
-// #[spec(prove, target = pool::create)]
-// fun create_spec<A, B>(
-//     init_a: Balance<A>,
-//     init_b: Balance<B>,
-//     lp_fee_bps: u64,
-//     admin_fee_pct: u64,
-//     ctx: &mut TxContext,
-// ): Balance<LP<A, B>> {
-//     asserts(init_a.value() > 0 && init_b.value() > 0);
-//     asserts(lp_fee_bps < pool::GET_BPS_IN_100_PCT());
-//     asserts(admin_fee_pct <= 100);
+#[spec(prove, target = pool::create)]
+fun create_spec<A, B>(
+    registry: &mut PoolRegistry,
+    init_a: Balance<A>,
+    init_b: Balance<B>,
+    lp_fee_bps: u64,
+    admin_fee_pct: u64,
+    ctx: &mut TxContext,
+): Balance<LP<A, B>> {
+    asserts(init_a.value() > 0 && init_b.value() > 0);
+    asserts(lp_fee_bps < pool::GET_BPS_IN_100_PCT());
+    asserts(admin_fee_pct <= 100);
 
-//     let result = pool::create(init_a, init_b, lp_fee_bps, admin_fee_pct, ctx);
+    let result = pool::create(registry, init_a, init_b, lp_fee_bps, admin_fee_pct, ctx);
 
-//     ensures(result.value() > 0);
+    ensures(result.value() > 0);
 
-//     result
-// }
+    result
+}
 
-// #[spec(prove)]
-// fun deposit_spec<A, B>(
-//     pool: &mut Pool<A, B>,
-//     input_a: Balance<A>,
-//     input_b: Balance<B>,
-// ): (Balance<A>, Balance<B>, Balance<LP<A, B>>) {
-//     requires_balance_sum_no_overflow!(&pool.balance_a, &input_a);
-//     requires_balance_sum_no_overflow!(&pool.balance_b, &input_b);
+#[spec(prove, target = pool::deposit)]
+fun deposit_spec<A, B>(
+    pool: &mut Pool<A, B>,
+    input_a: Balance<A>,
+    input_b: Balance<B>,
+    min_lp_out: u64,
+): (Balance<A>, Balance<B>, Balance<LP<A, B>>) {
+    requires_balance_sum_no_overflow!(pool::balance_a_ref(pool), &input_a);
+    requires_balance_sum_no_overflow!(pool::balance_b_ref(pool), &input_b);
 
-//     // regarding asserts:
-//     // there aren't any overflows or divisions by zero, because there aren't any asserts
-//     // (the list of assert conditions is exhaustive)
+    // regarding asserts:
+    // there aren't any overflows or divisions by zero, because there aren't any asserts
+    // (the list of assert conditions is exhaustive)
 
-//     let old_pool = old!(pool);
+    let old_pool = old!(pool);
 
-//     let (result_input_a, result_input_b, result_lp) = deposit(pool, input_a, input_b);
+    let (result_input_a, result_input_b, result_lp) = pool::deposit(pool, input_a, input_b, min_lp_out);
 
-//     // prove that depositing liquidity always returns LPs of smaller value then what was deposited
-//     ensures_a_and_b_price_increases!(pool, old_pool);
+    // prove that depositing liquidity always returns LPs of smaller value then what was deposited
+    ensures_a_and_b_price_increases!(pool, old_pool);
 
-//     (result_input_a, result_input_b, result_lp)
-// }
+    (result_input_a, result_input_b, result_lp)
+}
 
-// #[spec(prove)]
-// fun generic_deposit_spec(
-//     input_a_value: u64,
-//     input_b_value: u64,
-//     pool_a_value: u64,
-//     pool_b_value: u64,
-//     pool_lp_value: u64,
-// ): (u64, u64, u64) {
-//     let old_A = pool_a_value.to_int();
-//     let old_B = pool_b_value.to_int();
-//     let old_L = pool_lp_value.to_int();
+#[spec(prove, target = pool::withdraw)]
+fun withdraw_spec<A, B>(
+    pool: &mut Pool<A, B>,
+    lp_in: Balance<LP<A, B>>,
+    min_a_out: u64,
+    min_b_out: u64
+): (Balance<A>, Balance<B>) {
+    requires_balance_leq_supply!(&lp_in, pool::lp_supply_ref(pool));
 
-//     requires(0 < input_a_value);
-//     requires(0 < input_b_value);
-//     requires(old_A.add(input_a_value.to_int()).lte(u64::max_value!().to_int()));
-//     requires(old_B.add(input_b_value.to_int()).lte(u64::max_value!().to_int()));
+    // regarding asserts:
+    // there aren't any overflows or divisions by zero, because there aren't any asserts
+    // (the list of assert conditions is exhaustive)
 
-//     requires(old_L.is_zero!() && old_A.is_zero!() && old_B.is_zero!() || !old_L.is_zero!() && !old_A.is_zero!() && !old_B.is_zero!());
+    let old_pool = old!(pool);
 
-//     // L^2 <= A * B
-//     requires(old_L.mul(old_L).lte(old_A.mul(old_B)));
+    let (result_a, result_b) = pool::withdraw(pool, lp_in, min_a_out, min_b_out);
 
-//     // regarding asserts:
-//     // there aren't any overflows or divisions by zero, because there aren't any asserts
-//     // (the list of assert conditions is exhaustive)
+    // the invariant `Pool_inv` implies that when all LPs are withdrawn, both A and B go to zero
 
-//     let (deposit_a, deposit_b, lp_to_issue) = generic_deposit(
-//         input_a_value,
-//         input_b_value,
-//         pool_a_value,
-//         pool_b_value,
-//         pool_lp_value
-//     );
+    // prove that withdrawing liquidity always returns A and B of smaller value then what was withdrawn
+    ensures_a_and_b_price_increases!(pool, old_pool);
 
-//     let new_A = old_A.add(deposit_a.to_int());
-//     let new_B = old_B.add(deposit_b.to_int());
-//     let new_L = old_L.add(lp_to_issue.to_int());
+    (result_a, result_b)
+}
 
-//     ensures(deposit_a <= input_a_value);
-//     ensures(deposit_b <= input_b_value);
-//     ensures(new_L.lte(u64::max_value!().to_int()));
+#[spec(prove, target = pool::swap_a)]
+fun swap_a_spec<A, B>(
+    pool_: &mut Pool<A, B>,
+    input: Balance<A>,
+    min_out: u64,
+): Balance<B> {
+    requires_balance_sum_no_overflow!(pool::balance_a_ref(pool_), &input);
+    requires_balance_leq_supply!(pool::admin_fee_balance_ref(pool_), pool::lp_supply_ref(pool_));
 
-//     ensures(new_L.is_zero!() && new_A.is_zero!() && new_B.is_zero!() || !new_L.is_zero!() && !new_A.is_zero!() && !new_B.is_zero!());
+    // swapping on an empty pool is not possible
+    if (input.value() > 0) {
+        asserts(pool::lp_supply_ref(pool_).supply_value() > 0);
+    };
 
-//     // (L + dL) * A <= (A + dA) * L <=> L' * A <= A' * L
-//     ensures(new_L.mul(old_A).lte(new_A.mul(old_L)));
-//     // (L + dL) * B <= (B + dB) * L <=> L' * B <= B' * L
-//     ensures(new_L.mul(old_B).lte(new_B.mul(old_L)));
-//     // L^2 <= A * B
-//     ensures(new_L.mul(new_L).lte(new_A.mul(new_B)));
+    // regarding asserts:
+    // there aren't any overflows or divisions by zero, because there aren't any other asserts
+    // (the list of asserts conditions is exhaustive)
 
-//     (deposit_a, deposit_b, lp_to_issue)
-// }
+    let old_pool = old!(pool_);
 
-// #[spec(prove)]
-// fun withdraw_spec<A, B>(
-//     pool: &mut Pool<A, B>,
-//     lp_in: Balance<LP<A, B>>
-// ): (Balance<A>, Balance<B>) {
-//     requires_balance_leq_supply!(&lp_in, &pool.lp_supply);
+    let result = pool::swap_a(pool_, input, min_out);
 
-//     // regarding asserts:
-//     // there aren't any overflows or divisions by zero, because there aren't any asserts
-//     // (the list of assert conditions is exhaustive)
+    // L'^2 * A * B <= L^2 * A' * B'
+    ensures_product_price_increases!(pool_, old_pool);
 
-//     let old_pool = old!(pool);
+    // swapping on a non-empty pool can never cause any pool balance to go to zero
+    if (old_pool.lp_supply() > 0) {
+        ensures(pool::balance_a(pool_) > 0);
+        ensures(pool::balance_b(pool_) > 0);
+    };
 
-//     let (result_a, result_b) = withdraw(pool, lp_in);
+    result
+}
 
-//     // the invariant `Pool_inv` implies that when all LPs are withdrawn, both A and B go to zero
+#[spec(prove, target=pool::swap_b)]
+fun swap_b_spec<A, B>(
+    pool: &mut Pool<A, B>,
+    input: Balance<B>,
+    min_out: u64,
+): Balance<A> {
+    requires_balance_sum_no_overflow!(pool::balance_b_ref(pool), &input);
+    requires_balance_leq_supply!(pool::admin_fee_balance_ref(pool), pool::lp_supply_ref(pool));
 
-//     // prove that withdrawing liquidity always returns A and B of smaller value then what was withdrawn
-//     ensures_a_and_b_price_increases!(pool, old_pool);
+    // swapping on an empty pool is not possible
+    if (input.value() > 0) {
+        asserts(pool.lp_supply() > 0);
+    };
 
-//     (result_a, result_b)
-// }
+    // regarding asserts:
+    // there aren't any overflows or divisions by zero, because there aren't any other asserts
+    // (the list of asserts conditions is exhaustive)
 
-// #[spec(prove)]
-// fun swap_a_spec<A, B>(
-//     pool: &mut Pool<A, B>,
-//     input: Balance<A>,
-// ): Balance<B> {
-//     requires_balance_sum_no_overflow!(&pool.balance_a, &input);
-//     requires_balance_leq_supply!(&pool.admin_fee_balance, &pool.lp_supply);
+    let old_pool = old!(pool);
 
-//     // swapping on an empty pool is not possible
-//     if (input.value() > 0) {
-//         asserts(pool.lp_supply() > 0);
-//     };
+    let result = pool::swap_b(pool, input, min_out);
 
-//     // regarding asserts:
-//     // there aren't any overflows or divisions by zero, because there aren't any other asserts
-//     // (the list of asserts conditions is exhaustive)
+    // L'^2 * A * B <= L^2 * A' * B'
+    ensures_product_price_increases!(pool, old_pool);
 
-//     let old_pool = old!(pool);
+    // swapping on a non-empty pool can never cause any pool balance to go to zero
+    if (old_pool.lp_supply() > 0) {
+        ensures(pool.balance_a() > 0);
+        ensures(pool.balance_b() > 0);
+    };
 
-//     let result = swap_a(pool, input);
+    result
+}
 
-//     // L'^2 * A * B <= L^2 * A' * B'
-//     ensures_product_price_increases!(pool, old_pool);
+#[spec(prove, target=pool::calc_swap_result)]
+fun calc_swap_result_spec(
+    i_value: u64,
+    i_pool_value: u64,
+    o_pool_value: u64,
+    pool_lp_value: u64,
+    lp_fee_bps: u64,
+    admin_fee_pct: u64,
+): (u64, u64) {
+    requires(0 < i_pool_value);
+    requires(0 < o_pool_value);
+    requires(0 < pool_lp_value);
 
-//     // swapping on a non-empty pool can never cause any pool balance to go to zero
-//     if (old_pool.lp_supply() > 0) {
-//         ensures(pool.balance_a() > 0);
-//         ensures(pool.balance_b() > 0);
-//     };
+    let old_A = i_pool_value.to_int();
+    let old_B = o_pool_value.to_int();
+    let old_L = pool_lp_value.to_int();
+    let new_A = old_A.add(i_value.to_int());
 
-//     result
-// }
+    requires(new_A.lt(u64::max_value!().to_int()));
 
-// #[spec(prove)]
-// fun swap_b_spec<A, B>(
-//     pool: &mut Pool<A, B>,
-//     input: Balance<B>,
-// ): Balance<A> {
-//     requires_balance_sum_no_overflow!(&pool.balance_b, &input);
-//     requires_balance_leq_supply!(&pool.admin_fee_balance, &pool.lp_supply);
+    // L^2 <= A * B
+    requires(old_L.mul(old_L).lte(old_A.mul(old_B)));
 
-//     // swapping on an empty pool is not possible
-//     if (input.value() > 0) {
-//         asserts(pool.lp_supply() > 0);
-//     };
+    requires(lp_fee_bps <= pool::GET_BPS_IN_100_PCT());
+    requires(admin_fee_pct <= 100);
 
-//     // regarding asserts:
-//     // there aren't any overflows or divisions by zero, because there aren't any other asserts
-//     // (the list of asserts conditions is exhaustive)
+    // regarding asserts:
+    // there aren't any overflows or divisions by zero, because there aren't any asserts
+    // (the list of assert conditions is exhaustive)
 
-//     let old_pool = old!(pool);
+    let (out_value, admin_fee_in_lp) = pool::calc_swap_result(
+        i_value,
+        i_pool_value,
+        o_pool_value,
+        pool_lp_value,
+        lp_fee_bps,
+        admin_fee_pct,
+    );
 
-//     let result = swap_b(pool, input);
+    let new_B = old_B.sub(out_value.to_int());
+    let new_L = old_L.add(admin_fee_in_lp.to_int());
 
-//     // L'^2 * A * B <= L^2 * A' * B'
-//     ensures_product_price_increases!(pool, old_pool);
+    ensures(out_value <= o_pool_value);
+    ensures(new_L.lte(u64::max_value!().to_int()));
 
-//     // swapping on a non-empty pool can never cause any pool balance to go to zero
-//     if (old_pool.lp_supply() > 0) {
-//         ensures(pool.balance_a() > 0);
-//         ensures(pool.balance_b() > 0);
-//     };
+    // L'^2 * A * B <= L^2 * A' * B'
+    ensures(new_L.mul(new_L).mul(old_A).mul(old_B).lte(old_L.mul(old_L).mul(new_A).mul(new_B)));
+    // help the prover with `swap_b`
+    // L'^2 * B * A <= L^2 * B' * A'
+    ensures(new_L.mul(new_L).mul(old_B).mul(old_A).lte(old_L.mul(old_L).mul(new_B).mul(new_A)));
+    // L'^2 <= A' * B'
+    ensures(new_L.mul(new_L).lte(new_A.mul(new_B)));
 
-//     result
-// }
+    (out_value, admin_fee_in_lp)
+}
 
-// #[spec(prove)]
-// fun calc_swap_result_spec(
-//     i_value: u64,
-//     i_pool_value: u64,
-//     o_pool_value: u64,
-//     pool_lp_value: u64,
-//     lp_fee_bps: u64,
-//     admin_fee_pct: u64,
-// ): (u64, u64) {
-//     requires(0 < i_pool_value);
-//     requires(0 < o_pool_value);
-//     requires(0 < pool_lp_value);
-
-//     let old_A = i_pool_value.to_int();
-//     let old_B = o_pool_value.to_int();
-//     let old_L = pool_lp_value.to_int();
-//     let new_A = old_A.add(i_value.to_int());
-
-//     requires(new_A.lt(u64::max_value!().to_int()));
-
-//     // L^2 <= A * B
-//     requires(old_L.mul(old_L).lte(old_A.mul(old_B)));
-
-//     requires(lp_fee_bps <= BPS_IN_100_PCT);
-//     requires(admin_fee_pct <= 100);
-
-//     // regarding asserts:
-//     // there aren't any overflows or divisions by zero, because there aren't any asserts
-//     // (the list of assert conditions is exhaustive)
-
-//     let (out_value, admin_fee_in_lp) = calc_swap_result(
-//         i_value,
-//         i_pool_value,
-//         o_pool_value,
-//         pool_lp_value,
-//         lp_fee_bps,
-//         admin_fee_pct,
-//     );
-
-//     let new_B = old_B.sub(out_value.to_int());
-//     let new_L = old_L.add(admin_fee_in_lp.to_int());
-
-//     ensures(out_value <= o_pool_value);
-//     ensures(new_L.lte(u64::max_value!().to_int()));
-
-//     // L'^2 * A * B <= L^2 * A' * B'
-//     ensures(new_L.mul(new_L).mul(old_A).mul(old_B).lte(old_L.mul(old_L).mul(new_A).mul(new_B)));
-//     // help the prover with `swap_b`
-//     // L'^2 * B * A <= L^2 * B' * A'
-//     ensures(new_L.mul(new_L).mul(old_B).mul(old_A).lte(old_L.mul(old_L).mul(new_B).mul(new_A)));
-//     // L'^2 <= A' * B'
-//     ensures(new_L.mul(new_L).lte(new_A.mul(new_B)));
-
-//     (out_value, admin_fee_in_lp)
-// }
-
-// #[spec(prove)]
-// fun admin_set_fees_spec<A, B>(
-//     pool: &mut Pool<A, B>,
-//     cap: &AdminCap,
-//     lp_fee_bps: u64,
-//     admin_fee_pct: u64,
-// ) {
-//     asserts(lp_fee_bps < BPS_IN_100_PCT);
-//     asserts(admin_fee_pct <= 100);
-//     admin_set_fees(pool, cap, lp_fee_bps, admin_fee_pct);
-// }
+#[spec(prove, target=pool::admin_set_fees)]
+fun admin_set_fees_spec<A, B>(
+    pool: &mut Pool<A, B>,
+    cap: &pool::AdminCap,
+    lp_fee_bps: u64,
+    admin_fee_pct: u64,
+) {
+    asserts(lp_fee_bps < pool::GET_BPS_IN_100_PCT());
+    asserts(admin_fee_pct <= 100);
+    pool::admin_set_fees(pool, cap, lp_fee_bps, admin_fee_pct);
+}
 
 #[spec]
 fun sqrt_spec(x: u128): u64 {

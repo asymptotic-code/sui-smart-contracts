@@ -519,32 +519,52 @@ public fun init_for_testing(ctx: &mut TxContext) {
     init(ctx)
 }
 
-#[test_only]
+#[spec_only]
 public fun GET_BPS_IN_100_PCT(): u64 {
     BPS_IN_100_PCT
 }
 
-#[test_only]
+#[spec_only]
 public fun balance_a<A, B>(pool: &Pool<A, B>): u64 {
     pool.balance_a.value()
 }
 
-#[test_only]
+#[spec_only]
 public fun balance_b<A, B>(pool: &Pool<A, B>): u64 {
     pool.balance_b.value()
 }
 
-#[test_only]
+#[spec_only]
 public fun lp_supply<A, B>(pool: &Pool<A, B>): u64 {
     pool.lp_supply.supply_value()
 }
 
-#[test_only]
+#[spec_only]
+public fun balance_a_ref<A, B>(pool: &Pool<A, B>): &Balance<A> {
+    &pool.balance_a
+}
+
+#[spec_only]
+public fun balance_b_ref<A, B>(pool: &Pool<A, B>): &Balance<B> {
+    &pool.balance_b
+}
+
+#[spec_only]
+public fun admin_fee_balance_ref<A, B>(pool: &Pool<A, B>): &Balance<LP<A, B>> {
+    &pool.admin_fee_balance
+}
+
+#[spec_only]
+public fun lp_supply_ref<A, B>(pool: &Pool<A, B>): &Supply<LP<A, B>> {
+    &pool.lp_supply
+}
+
+#[spec_only]
 public fun lp_fee_bps<A, B>(pool: &Pool<A, B>): u64 {
     pool.lp_fee_bps
 }
 
-#[test_only]
+#[spec_only]
 public fun admin_fee_pct<A, B>(pool: &Pool<A, B>): u64 {
     pool.admin_fee_pct
 }
