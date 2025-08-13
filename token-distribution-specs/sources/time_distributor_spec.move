@@ -12,7 +12,7 @@ use token_distribution_specs::utils::{require_start_timestamp_valid};
 
 #[spec_only]
 use fun TimeDistributor_inv as TimeDistributor.inv;
-#[spec_only]
+#[spec_only(inv_target = token_distribution::time_distributor::TimeDistributor)]
 fun TimeDistributor_inv<T, K: copy>(self: &TimeDistributor<T, K>): bool {
     TimeLockedBalance_inv(self.tlb())
         && self.size() == 0

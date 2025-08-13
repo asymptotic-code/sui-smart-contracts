@@ -38,7 +38,7 @@ macro fun unlockable_amount_expected<$T>($self: &TimeLockedBalance<$T>, $now: u6
 
 #[spec_only]
 use fun TimeLockedBalance_inv as TimeLockedBalance.inv;
-#[spec_only]
+#[spec_only(inv_target = token_distribution::time_locked_balance::TimeLockedBalance)]
 public fun TimeLockedBalance_inv<T>(self: &TimeLockedBalance<T>): bool {
     let mut timestamp = u64::max(self.unlock_start_ts_sec(), self.previous_unlock_at());
     if (timestamp > self.final_unlock_ts_sec()) {

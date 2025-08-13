@@ -26,7 +26,7 @@ fun sqrt(x: u128): u64 {
 /// Invariant for the pool state.
 #[spec_only]
 use fun Pool_inv as Pool.inv;
-#[spec_only(inv_target = amm_specs::pool_specs::Pool)]
+#[spec_only(inv_target = amm::pool::Pool)]
 fun Pool_inv<A, B>(pool: &Pool<A, B>): bool {
     let l = pool::lp_supply(pool);
     let a = pool::balance_a(pool);
