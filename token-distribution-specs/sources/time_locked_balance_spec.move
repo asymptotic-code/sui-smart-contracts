@@ -276,7 +276,10 @@ public fun top_up_spec<T>(self: &mut TimeLockedBalance<T>, balance: Balance<T>, 
     ensures(self.final_unlock_ts_sec() >= final_unlock_ts_sec_old);
 }
 
-#[spec(prove, target = time_locked_balance::change_unlock_per_second)]
+#[spec(prove,
+    target = time_locked_balance::change_unlock_per_second,
+    boogie_opt=b"vcsMaxKeepGoingSplits:2 vcsSplitOnEveryAssert vcsFinalAssertTimeout:600",
+)]
 public fun change_unlock_per_second_spec<T>(
     self: &mut TimeLockedBalance<T>,
     new_unlock_per_second: u64,
