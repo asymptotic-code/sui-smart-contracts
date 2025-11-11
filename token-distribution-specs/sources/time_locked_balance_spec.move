@@ -231,7 +231,11 @@ public fun withdraw_all_spec<T>(self: &mut TimeLockedBalance<T>, clock: &Clock):
     result
 }
 
-#[spec(prove, target = time_locked_balance::top_up)]
+#[spec(
+    prove, 
+    target = time_locked_balance::top_up,
+    boogie_opt=b"vcsMaxKeepGoingSplits:2 vcsSplitOnEveryAssert vcsFinalAssertTimeout:600",
+)]
 public fun top_up_spec<T>(self: &mut TimeLockedBalance<T>, balance: Balance<T>, clock: &Clock) {
     requires(self.previous_unlock_at() <= timestamp_sec(clock));
 
