@@ -16,7 +16,7 @@ use sui::balance::{Balance, Supply};
 // use sui::table::{Self, Table};
 
 #[spec_only]
-use prover::prover::{requires, ensures, asserts, old};
+use prover::prover::{requires, ensures, asserts, clone};
 
 #[spec_only]
 fun sqrt(x: u128): u64 {
@@ -124,7 +124,7 @@ fun deposit_spec<A, B>(
     // there aren't any overflows or divisions by zero, because there aren't any asserts
     // (the list of assert conditions is exhaustive)
 
-    let old_pool = old!(pool);
+    let old_pool = clone!(pool);
 
     let (result_input_a, result_input_b, result_lp) = pool::deposit(pool, input_a, input_b, min_lp_out);
 
@@ -147,7 +147,7 @@ fun withdraw_spec<A, B>(
     // there aren't any overflows or divisions by zero, because there aren't any asserts
     // (the list of assert conditions is exhaustive)
 
-    let old_pool = old!(pool);
+    let old_pool = clone!(pool);
 
     let (result_a, result_b) = pool::withdraw(pool, lp_in, min_a_out, min_b_out);
 
@@ -177,7 +177,7 @@ fun swap_a_spec<A, B>(
     // there aren't any overflows or divisions by zero, because there aren't any other asserts
     // (the list of asserts conditions is exhaustive)
 
-    let old_pool = old!(pool_);
+    let old_pool = clone!(pool_);
 
     let result = pool::swap_a(pool_, input, min_out);
 
@@ -211,7 +211,7 @@ fun swap_b_spec<A, B>(
     // there aren't any overflows or divisions by zero, because there aren't any other asserts
     // (the list of asserts conditions is exhaustive)
 
-    let old_pool = old!(pool);
+    let old_pool = clone!(pool);
 
     let result = pool::swap_b(pool, input, min_out);
 

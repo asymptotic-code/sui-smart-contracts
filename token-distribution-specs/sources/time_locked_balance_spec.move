@@ -7,7 +7,7 @@ use token_distribution::time_locked_balance::{Self, TimeLockedBalance};
 use token_distribution::primitives_util::timestamp_sec;
 
 #[spec_only]
-use prover::prover::{asserts, requires, ensures, old};
+use prover::prover::{asserts, requires, ensures};
 #[spec_only]
 use std::integer::Integer;
 
